@@ -5,12 +5,14 @@ import {
   PackageCheck, 
   FlaskConical, 
   FileText, 
-  Users
+  Users,
+  Printer
 } from 'lucide-react';
 
 export type TabId = 
   | 'dashboard'
   | 'registration'
+  | 'sticker-print'
   | 'sample-receive'
   | 'result-entry'
   | 'referral'
@@ -47,8 +49,16 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: null
     },
     {
+      id: 'sticker-print' as TabId,
+      name: '3. พิมพ์สติกเกอร์',
+      shortName: 'สติกเกอร์',
+      desc: 'ขนาด 7×2.5 cm + QR',
+      icon: Printer,
+      badge: null
+    },
+    {
       id: 'sample-receive' as TabId,
-      name: '3. รับชุดตรวจ',
+      name: '4. รับชุดตรวจ',
       shortName: 'รับชุดตรวจ',
       desc: 'สแกนรับ / นน. สส. เอว BP',
       icon: PackageCheck,
@@ -57,7 +67,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'result-entry' as TabId,
-      name: '4. บันทึกผล FIT',
+      name: '5. บันทึกผล FIT',
       shortName: 'บันทึกผล',
       desc: 'สแกน HN / แดง เขียว ดำ',
       icon: FlaskConical,
@@ -65,7 +75,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'referral' as TabId,
-      name: '5. ส่งต่อส่องกล้อง',
+      name: '6. ส่งต่อส่องกล้อง',
       shortName: 'ส่งต่อ',
       desc: 'Positive → รพ.สกลนคร',
       icon: FileText,
@@ -74,7 +84,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'all-list' as TabId,
-      name: '6. รายชื่อทั้งหมด',
+      name: '7. รายชื่อทั้งหมด',
       shortName: 'รายชื่อ',
       desc: 'ตารางข้อมูลครบ & ส่งออก Excel',
       icon: Users,

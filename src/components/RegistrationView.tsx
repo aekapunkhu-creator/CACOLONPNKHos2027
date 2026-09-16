@@ -15,7 +15,8 @@ import {
   Calendar,
   IdCard,
   Building,
-  UserCheck
+  UserCheck,
+  Tag
 } from 'lucide-react';
 
 interface RegistrationViewProps {
@@ -24,6 +25,7 @@ interface RegistrationViewProps {
   onImportPatients: (imported: PatientScreening[]) => void;
   onDeletePatient: (id: string) => void;
   onClearAllPatients?: () => void;
+  onNavigateToStickerPrint?: (hn?: string) => void;
 }
 
 export const RegistrationView: React.FC<RegistrationViewProps> = ({
@@ -31,7 +33,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   onAddPatient,
   onImportPatients,
   onDeletePatient,
-  onClearAllPatients
+  onClearAllPatients,
+  onNavigateToStickerPrint
 }) => {
   const [activeTab, setActiveTab] = useState<'form' | 'excel'>('form');
   const [searchQuery, setSearchQuery] = useState('');
@@ -604,7 +607,19 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {onNavigateToStickerPrint && patients.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onNavigateToStickerPrint('')}
+                title="ไปที่หน้าพิมพ์สติกเกอร์ขนาด 7x2.5 cm สำหรับผู้ป่วยทั้งหมด"
+                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 flex-shrink-0"
+              >
+                <Tag className="w-3.5 h-3.5 text-emerald-700" />
+                <span>พิมพ์สติกเกอร์ (7×2.5 cm)</span>
+              </button>
+            )}
+
             {onClearAllPatients && patients.length > 0 && (
               <button
                 type="button"
@@ -714,13 +729,26 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => onDeletePatient(p.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
-                        title="ลบรายการ"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        {onNavigateToStickerPrint && (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToStickerPrint(p.hn)}
+                            className="p-1 text-slate-400 hover:text-emerald-700 rounded transition-colors"
+                            title="พิมพ์สติกเกอร์ 7x2.5 cm สำหรับผู้ป่วยรายนี้"
+                          >
+                            <Tag className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onDeletePatient(p.id)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                          title="ลบรายการ"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -12,17 +12,20 @@ import {
   HelpCircle,
   Clock,
   Send,
-  Printer
+  Printer,
+  Tag
 } from 'lucide-react';
 
 interface AllScreeningListViewProps {
   patients: PatientScreening[];
   onNavigateToReferral: (hn: string) => void;
+  onNavigateToStickerPrint?: (hn: string) => void;
 }
 
 export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   patients,
-  onNavigateToReferral
+  onNavigateToReferral,
+  onNavigateToStickerPrint
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterResult, setFilterResult] = useState<string>('all');
@@ -78,14 +81,27 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center gap-2 self-start md:self-auto"
-          >
-            <Download className="w-4 h-4" />
-            <span>ส่งออกเป็นไฟล์ Excel (.xlsx)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+            {onNavigateToStickerPrint && (
+              <button
+                type="button"
+                onClick={() => onNavigateToStickerPrint('')}
+                className="px-4 py-3 bg-white border border-emerald-600 text-emerald-700 hover:bg-emerald-50 rounded-xl text-sm font-semibold transition-all shadow-xs flex items-center gap-2"
+              >
+                <Tag className="w-4 h-4 text-emerald-600" />
+                <span>พิมพ์สติกเกอร์ (7×2.5 cm)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              <span>ส่งออกเป็นไฟล์ Excel (.xlsx)</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Controls */}
@@ -316,19 +332,31 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                         )}
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
-                        {p.fitResult === 'positive' ? (
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToReferral(p.hn)}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition-colors"
-                            title="ดูใบส่งต่อส่องกล้อง รพ.สกลนคร"
-                          >
-                            <Send className="w-3 h-3" />
-                            ใบส่งต่อ รพ.สกลนคร
-                          </button>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">-</span>
-                        )}
+                        <div className="flex items-center justify-center gap-1.5">
+                          {onNavigateToStickerPrint && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToStickerPrint(p.hn)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-1 rounded-lg transition-colors"
+                              title="พิมพ์สติกเกอร์ขนาด 7x2.5 cm สำหรับผู้ป่วยรายนี้"
+                            >
+                              <Tag className="w-3 h-3" />
+                              <span>สติกเกอร์</span>
+                            </button>
+                          )}
+
+                          {p.fitResult === 'positive' && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToReferral(p.hn)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-1 rounded-lg transition-colors"
+                              title="ดูใบส่งต่อส่องกล้อง รพ.สกลนคร"
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>ส่งต่อ</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

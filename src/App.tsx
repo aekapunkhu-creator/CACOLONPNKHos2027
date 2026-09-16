@@ -13,6 +13,7 @@ import { Header } from './components/Header';
 import { Navigation, TabId } from './components/Navigation';
 import { DashboardView } from './components/DashboardView';
 import { RegistrationView } from './components/RegistrationView';
+import { StickerPrintView } from './components/StickerPrintView';
 import { SampleReceiveView } from './components/SampleReceiveView';
 import { ResultEntryView } from './components/ResultEntryView';
 import { ReferralView } from './components/ReferralView';
@@ -225,6 +226,11 @@ export default function App() {
     setActiveTab('referral');
   };
 
+  const handleNavigateToStickerPrint = (hn?: string) => {
+    setTargetHnForNextTab(hn);
+    setActiveTab('sticker-print');
+  };
+
   // Print Handlers
   const handlePrintIndividual = (patient: PatientScreening) => {
     setPatientsToPrint([patient]);
@@ -300,6 +306,14 @@ export default function App() {
             onImportPatients={handleImportPatients}
             onDeletePatient={handleDeletePatient}
             onClearAllPatients={handleClearAllPatients}
+            onNavigateToStickerPrint={handleNavigateToStickerPrint}
+          />
+        )}
+
+        {activeTab === 'sticker-print' && (
+          <StickerPrintView
+            patients={patients}
+            initialSelectedHn={targetHnForNextTab}
           />
         )}
 
@@ -335,6 +349,7 @@ export default function App() {
           <AllScreeningListView
             patients={patients}
             onNavigateToReferral={handleNavigateToReferral}
+            onNavigateToStickerPrint={handleNavigateToStickerPrint}
           />
         )}
       </main>
