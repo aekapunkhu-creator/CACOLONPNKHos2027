@@ -82,13 +82,31 @@ export async function clearAllPatientsFromFirestore() {
 }
 
 /**
+ * Helper to strip any undefined properties recursively
+ * (Firestore throws an error if any field is undefined)
+ */
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      if (val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = sanitizeForFirestore(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * Seed initial sample patients into Firestore (เฉพาะเมื่อผู้ใช้ต้องการทดสอบแบบกดปุ่มเอง)
  */
 export async function seedInitialPatients() {
   const batch = writeBatch(db);
   for (const patient of INITIAL_PATIENTS) {
     const docRef = doc(db, PATIENTS_COLLECTION, patient.id);
-    batch.set(docRef, patient);
+    batch.set(docRef, sanitizeForFirestore(patient));
   }
   await batch.commit();
 }
@@ -98,7 +116,8 @@ export async function seedInitialPatients() {
  */
 export async function savePatientToFirestore(patient: PatientScreening) {
   const docRef = doc(db, PATIENTS_COLLECTION, patient.id);
-  await setDoc(docRef, patient, { merge: true });
+  const cleanData = sanitizeForFirestore(patient);
+  await setDoc(docRef, cleanData, { merge: true });
 }
 
 /**
@@ -112,7 +131,8 @@ export async function batchSavePatientsToFirestore(patients: PatientScreening[])
     const batch = writeBatch(db);
     for (const p of chunk) {
       const docRef = doc(db, PATIENTS_COLLECTION, p.id);
-      batch.set(docRef, p, { merge: true });
+      const cleanData = sanitizeForFirestore(p);
+      batch.set(docRef, cleanData, { merge: true });
     }
     await batch.commit();
   }

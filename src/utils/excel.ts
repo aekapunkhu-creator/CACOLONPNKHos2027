@@ -320,7 +320,7 @@ export async function parseExcelPatients(file: File): Promise<PatientScreening[]
 
           const testedBy = getVal(['ผู้ตรวจ', 'เจ้าหน้าที่', 'testedby']) || undefined;
 
-          return {
+          const patientRecord: PatientScreening = {
             id: `pt-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
             hn,
             villageNo,
@@ -339,18 +339,21 @@ export async function parseExcelPatients(file: File): Promise<PatientScreening[]
             benefitName,
             underlyingDisease,
             kitStatus,
-            heightCm,
-            weightKg,
-            waistInch,
-            waistCm,
-            bloodPressureSys,
-            bloodPressureDia,
-            bmi,
-            fitResult,
-            testedDate,
-            testedBy,
-            kitReceivedDate: kitStatus !== 'not_received' ? new Date().toISOString().split('T')[0] : undefined
+            fitResult
           };
+
+          if (heightCm !== undefined && !isNaN(heightCm)) patientRecord.heightCm = heightCm;
+          if (weightKg !== undefined && !isNaN(weightKg)) patientRecord.weightKg = weightKg;
+          if (waistInch !== undefined && !isNaN(waistInch)) patientRecord.waistInch = waistInch;
+          if (waistCm !== undefined && !isNaN(waistCm)) patientRecord.waistCm = waistCm;
+          if (bloodPressureSys !== undefined && !isNaN(bloodPressureSys)) patientRecord.bloodPressureSys = bloodPressureSys;
+          if (bloodPressureDia !== undefined && !isNaN(bloodPressureDia)) patientRecord.bloodPressureDia = bloodPressureDia;
+          if (bmi !== undefined && !isNaN(bmi)) patientRecord.bmi = bmi;
+          if (testedDate) patientRecord.testedDate = testedDate;
+          if (testedBy) patientRecord.testedBy = testedBy;
+          if (kitStatus !== 'not_received') patientRecord.kitReceivedDate = new Date().toISOString().split('T')[0];
+
+          return patientRecord;
         });
 
         resolve(patients);

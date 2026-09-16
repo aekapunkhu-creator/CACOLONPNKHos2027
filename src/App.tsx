@@ -38,18 +38,14 @@ export default function App() {
     return null;
   });
 
-  // Load initial patients: default to [] ready for fresh import
+  // Load initial patients from localStorage
   const [patients, setPatients] = useState<PatientScreening[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // If cached data contains legacy mock dummy records, clean them
-          const hasOldMock = parsed.some(p => p.id === 'pt-001' || p.hn === '67-00101');
-          if (!hasOldMock) {
-            return parsed;
-          }
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
       }
     } catch (e) {
@@ -84,33 +80,17 @@ export default function App() {
     }
   };
 
-  // Real-time Firestore synchronization & Auto-purge legacy mock data
+  // Real-time Firestore synchronization
   useEffect(() => {
     const unsubscribe = subscribeToPatients(
-      async (cloudPatients) => {
-        // Detect if Firestore currently holds the old mock demo data (e.g. pt-001 or 67-00101)
-        const hasLegacyMock = cloudPatients.some(p => p.id === 'pt-001' || p.hn === '67-00101');
-        if (hasLegacyMock) {
-          console.log('Detected legacy mock patients in Firestore. Clearing to prepare for fresh real import...');
-          try {
-            await clearAllPatientsFromFirestore();
-            setPatients([]);
-            try {
-              localStorage.removeItem(STORAGE_KEY);
-            } catch {}
-            setCloudSyncToast('ล้างข้อมูลตัวอย่างเดิมเรียบร้อยแล้ว ฐานข้อมูลพร้อมนำเข้าข้อมูลจริง');
-            setTimeout(() => setCloudSyncToast(null), 4000);
-            return;
-          } catch (e) {
-            console.error('Failed to auto-purge legacy patients:', e);
-          }
-        }
-
+      (cloudPatients) => {
         setPatients(cloudPatients);
         setIsCloudConnected(true);
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudPatients));
-        } catch {}
+        } catch (e) {
+          console.warn('Failed to cache cloud patients to localStorage:', e);
+        }
       },
       (error) => {
         console.warn('Firestore subscription status:', error);
@@ -155,49 +135,81 @@ export default function App() {
   };
 
   const handleAddPatient = async (newPatient: PatientScreening) => {
-    // Optimistic local update
-    setPatients(prev => [newPatient, ...prev]);
+    // Immediate state & local storage update
+    setPatients(prev => {
+      const next = [newPatient, ...prev.filter(p => p.id !== newPatient.id)];
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
     try {
       await savePatientToFirestore(newPatient);
-      setCloudSyncToast(`บันทึก HN: ${newPatient.hn} ขึ้น Firebase สำเร็จ (ซิงค์ทุกเครื่องทันที)`);
+      setCloudSyncToast(`บันทึก HN: ${newPatient.hn} ขึ้น Cloud Firebase สำเร็จ`);
       setTimeout(() => setCloudSyncToast(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving patient to Firestore:', err);
+      setCloudSyncToast(`บันทึกข้อมูลในเครื่องแล้ว (คลาวด์: ${err?.message || 'รอดำเนินการ'})`);
+      setTimeout(() => setCloudSyncToast(null), 4000);
     }
   };
 
   const handleImportPatients = async (importedList: PatientScreening[]) => {
-    // Optimistic local update
-    setPatients(prev => [...importedList, ...prev]);
+    // Immediate state & local storage update
+    setPatients(prev => {
+      const next = [...importedList, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
     try {
       await batchSavePatientsToFirestore(importedList);
-      setCloudSyncToast(`นำเข้าผู้ป่วย ${importedList.length} คน ขึ้น Firebase เรียบร้อย`);
+      setCloudSyncToast(`นำเข้าผู้ป่วย ${importedList.length} คน ขึ้น Cloud Firebase เรียบร้อย`);
       setTimeout(() => setCloudSyncToast(null), 3500);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Batch save error:', err);
+      setCloudSyncToast(`บันทึกข้อมูล ${importedList.length} คน ในเครื่องแล้ว (คลาวด์: ${err?.message || 'รอดำเนินการ'})`);
+      setTimeout(() => setCloudSyncToast(null), 4000);
     }
   };
 
   const handleDeletePatient = async (id: string) => {
     if (window.confirm('คุณต้องการลบข้อมูลผู้ป่วยรายนี้ใช่หรือไม่? การลบจะมีผลกับทุกเครื่องที่เชื่อมต่อ')) {
-      setPatients(prev => prev.filter(p => p.id !== id));
+      setPatients(prev => {
+        const next = prev.filter(p => p.id !== id);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
       try {
         await deletePatientFromFirestore(id);
         setCloudSyncToast('ลบข้อมูลบน Cloud Firebase สำเร็จ');
         setTimeout(() => setCloudSyncToast(null), 2500);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Delete error:', err);
       }
     }
   };
 
   const handleUpdatePatient = async (updated: PatientScreening) => {
-    setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
+    setPatients(prev => {
+      const next = prev.map(p => p.id === updated.id ? updated : p);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
     try {
       await savePatientToFirestore(updated);
-      setCloudSyncToast(`อัปเดตข้อมูล HN: ${updated.hn} บน Cloud Firebase สำเร็จ (ซิงค์ทุกเครื่องทันที)`);
+      setCloudSyncToast(`อัปเดตข้อมูล HN: ${updated.hn} บน Cloud Firebase สำเร็จ`);
       setTimeout(() => setCloudSyncToast(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Update error:', err);
     }
   };
