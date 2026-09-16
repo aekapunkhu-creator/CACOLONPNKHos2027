@@ -1,0 +1,10 @@
+{
+  "name": "ระบบคัดกรองมะเร็งลำไส้ใหญ่ FIT Test โรงพยาบาลโพนนาแก้ว",
+  "description": "ระบบคัดกรองโรคมะเร็งลำไส้ใหญ่และลำไส้ตรงด้วยชุดตรวจ FIT Test หน่วยบริการ โรงพยาบาลโพนนาแก้ว พร้อมระบบสแกนบาร์โค้ด ออกใบส่งต่อ Colonoscopy และรายงานสรุป",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
