@@ -108,8 +108,9 @@ export const VhvMobileVitalsView: React.FC<VhvMobileVitalsViewProps> = ({
 
   // Filtered patient list
   const filteredPatients = useMemo(() => {
+    const list = Array.isArray(patients) ? patients : [];
     const q = searchQuery.toLowerCase().trim();
-    return patients.filter(p => {
+    return list.filter(p => {
       if (selectedVillage !== 'all') {
         const match = p.villageNo === selectedVillage || (!isNaN(parseInt(p.villageNo, 10)) && parseInt(p.villageNo, 10) === parseInt(selectedVillage, 10));
         if (!match) return false;
@@ -479,6 +480,9 @@ export const VhvMobileVitalsView: React.FC<VhvMobileVitalsViewProps> = ({
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
         onScanSuccess={handleScanSuccess}
+        title="สแกน Barcode / QR Code ค้นหาผู้ป่วย"
+        description="หันกล้องไปที่บาร์โค้ดบนใบนัดหรือสติกเกอร์ผู้ป่วย"
+        patients={patients}
       />
     </div>
   );

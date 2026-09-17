@@ -7,18 +7,18 @@ interface BarcodeScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onScanSuccess: (hn: string) => void;
-  title: string;
-  description: string;
-  patients: PatientScreening[];
+  title?: string;
+  description?: string;
+  patients?: PatientScreening[];
 }
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
-  title,
-  description,
-  patients
+  title = 'สแกน Barcode / QR Code',
+  description = 'หันกล้องไปที่บาร์โค้ดหรือคิวอาร์โค้ด HN ผู้ป่วย',
+  patients = []
 }) => {
   const [manualHn, setManualHn] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -235,35 +235,37 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           </form>
 
           {/* Quick Click for Demo Patients */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                คลิกเลือก HN ทดสอบด่วน (Simulation):
-              </span>
-              <span className="text-[11px] text-slate-400">คลิกเพื่อจำลองการสแกน</span>
+          {patients && patients.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  คลิกเลือก HN ทดสอบด่วน (Simulation):
+                </span>
+                <span className="text-[11px] text-slate-400">คลิกเพื่อจำลองการสแกน</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
+                {(patients || []).slice(0, 6).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleCodeFound(p.hn)}
+                    className="text-left p-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all text-xs group"
+                  >
+                    <div className="font-semibold text-slate-800 group-hover:text-emerald-700">
+                      HN: {p.hn}
+                    </div>
+                    <div className="text-slate-500 truncate text-[11px]">
+                      {p.prefix}{p.firstName} {p.lastName}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      ม.{p.villageNo} {p.villageName}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
-              {patients.slice(0, 6).map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => handleCodeFound(p.hn)}
-                  className="text-left p-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all text-xs group"
-                >
-                  <div className="font-semibold text-slate-800 group-hover:text-emerald-700">
-                    HN: {p.hn}
-                  </div>
-                  <div className="text-slate-500 truncate text-[11px]">
-                    {p.prefix}{p.firstName} {p.lastName}
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    ม.{p.villageNo} {p.villageName}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Footer */}

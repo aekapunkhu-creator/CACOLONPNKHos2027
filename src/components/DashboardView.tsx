@@ -41,7 +41,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const adminMatchedPatients = useMemo(() => {
     if (!adminSearchQuery.trim()) return [];
     const q = adminSearchQuery.toLowerCase().trim();
-    return patients.filter(p => 
+    const list = Array.isArray(patients) ? patients : [];
+    return list.filter(p => 
       p.hn.toLowerCase().includes(q) || 
       `${p.prefix}${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
       p.idCard.includes(q)

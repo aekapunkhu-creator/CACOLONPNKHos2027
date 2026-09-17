@@ -54,12 +54,13 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   
   // Selected IDs for batch printing
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    const list = Array.isArray(patients) ? patients : [];
     if (initialSelectedHn) {
-      const match = patients.find(p => p.hn === initialSelectedHn);
-      return match ? new Set([match.id]) : new Set(patients.slice(0, 20).map(p => p.id));
+      const match = list.find(p => p.hn === initialSelectedHn);
+      return match ? new Set([match.id]) : new Set(list.slice(0, 20).map(p => p.id));
     }
     // Default select all or first 20
-    return new Set(patients.map(p => p.id));
+    return new Set(list.map(p => p.id));
   });
 
   // Keep selection in sync when initialSelectedHn changes
@@ -144,7 +145,8 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   // Generate QR codes for the first visible batch of patients in preview
   useEffect(() => {
     let isCancelled = false;
-    const toGenerate = filteredPatients.slice(0, 30).filter(p => !qrCache[p.id]);
+    const list = Array.isArray(filteredPatients) ? filteredPatients : [];
+    const toGenerate = list.slice(0, 30).filter(p => !qrCache[p.id]);
 
     if (toGenerate.length === 0) return;
 
