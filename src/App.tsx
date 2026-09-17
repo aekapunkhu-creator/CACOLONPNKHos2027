@@ -20,12 +20,26 @@ import { ReferralView } from './components/ReferralView';
 import { AllScreeningListView } from './components/AllScreeningListView';
 import { ReferralPrintDocument } from './components/ReferralPrintDocument';
 import { LoginView } from './components/LoginView';
+import { EditPatientModal } from './components/EditPatientModal';
+import { DeletePatientConfirmModal } from './components/DeletePatientConfirmModal';
+import { VhvMobileVitalsView } from './components/VhvMobileVitalsView';
 import { Cloud, CheckCircle2, Smartphone, ShieldCheck, Loader2 } from 'lucide-react';
 
 const STORAGE_KEY = 'pnk_hospital_fit_screening_v1';
 const AUTH_KEY = 'pnk_current_auth_user';
 
 export default function App() {
+  // Check if URL specifies VHV mobile mode (?mode=vhv_vitals or #vhv_vitals)
+  const [isVhvMode, setIsVhvMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search;
+      const hash = window.location.hash;
+      const params = new URLSearchParams(search);
+      return params.get('mode') === 'vhv_vitals' || hash.includes('vhv_vitals');
+    }
+    return false;
+  });
+
   // Authentication State: Check if user is already logged in
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
@@ -45,14 +59,14 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
       }
     } catch (e) {
       console.warn('Failed to load from localStorage:', e);
     }
-    return [];
+    return INITIAL_PATIENTS;
   });
 
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
@@ -60,6 +74,47 @@ export default function App() {
   const [patientsToPrint, setPatientsToPrint] = useState<PatientScreening[]>([]);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [cloudSyncToast, setCloudSyncToast] = useState<string | null>(null);
+
+  // Admin Edit & Delete Modal States
+  const [patientToEdit, setPatientToEdit] = useState<PatientScreening | null>(null);
+  const [patientToDelete, setPatientToDelete] = useState<PatientScreening | null>(null);
+
+  const handleOpenEditModal = (patient: PatientScreening) => {
+    setPatientToEdit(patient);
+  };
+
+  const handleCloseEditModal = () => {
+    setPatientToEdit(null);
+  };
+
+  const handleOpenDeleteModal = (patient: PatientScreening) => {
+    setPatientToDelete(patient);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setPatientToDelete(null);
+  };
+
+  const handleConfirmDelete = async (patientId: string) => {
+    setPatients(prev => {
+      const next = prev.filter(p => p.id !== patientId);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    try {
+      await deletePatientFromFirestore(patientId);
+      setCloudSyncToast('ลบข้อมูลผู้ป่วยบน Cloud Firebase สำเร็จ');
+      setTimeout(() => setCloudSyncToast(null), 2500);
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      setCloudSyncToast('ลบข้อมูลในเครื่องแล้ว (คลาวด์: รอดำเนินการ)');
+      setTimeout(() => setCloudSyncToast(null), 3000);
+    }
+    setPatientToDelete(null);
+  };
 
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
@@ -253,9 +308,43 @@ export default function App() {
   const pendingKitCount = patients.filter(p => p.kitStatus === 'not_received').length;
   const positiveCount = patients.filter(p => p.fitResult === 'positive').length;
 
+  const handleExitVhvMode = () => {
+    setIsVhvMode(false);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('mode');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
+  };
+
+  const handleEnterVhvMode = () => {
+    setIsVhvMode(true);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', 'vhv_vitals');
+      window.history.pushState({}, '', url.toString());
+    }
+  };
+
+  // If user requested VHV mobile mode (via QR code or direct link), show mobile view WITHOUT requiring login!
+  if (isVhvMode) {
+    return (
+      <VhvMobileVitalsView
+        patients={patients}
+        onUpdatePatient={handleUpdatePatient}
+        onExitVhvMode={handleExitVhvMode}
+      />
+    );
+  }
+
   // If user is not authenticated, show strictly the login screen
   if (!currentUser) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <LoginView 
+        onLoginSuccess={handleLoginSuccess}
+        onOpenVhvMobileMode={handleEnterVhvMode}
+      />
+    );
   }
 
   return (
@@ -296,6 +385,9 @@ export default function App() {
           <DashboardView
             patients={patients}
             onNavigateToTab={(tab) => setActiveTab(tab)}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
           />
         )}
 
@@ -304,9 +396,11 @@ export default function App() {
             patients={patients}
             onAddPatient={handleAddPatient}
             onImportPatients={handleImportPatients}
-            onDeletePatient={handleDeletePatient}
+            onDeletePatient={handleOpenDeleteModal}
+            onEditPatient={handleOpenEditModal}
             onClearAllPatients={handleClearAllPatients}
             onNavigateToStickerPrint={handleNavigateToStickerPrint}
+            currentUser={currentUser}
           />
         )}
 
@@ -314,6 +408,9 @@ export default function App() {
           <StickerPrintView
             patients={patients}
             initialSelectedHn={targetHnForNextTab}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
           />
         )}
 
@@ -322,6 +419,10 @@ export default function App() {
             patients={patients}
             onUpdatePatient={handleUpdatePatient}
             onNavigateToResult={handleNavigateToResult}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
+            onOpenVhvMobileMode={handleEnterVhvMode}
           />
         )}
 
@@ -332,6 +433,9 @@ export default function App() {
             onUpdatePatient={handleUpdatePatient}
             onNavigateToReferral={handleNavigateToReferral}
             currentUserName={currentUser.name}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
           />
         )}
 
@@ -342,6 +446,9 @@ export default function App() {
             onUpdatePatient={handleUpdatePatient}
             onPrintIndividual={handlePrintIndividual}
             onPrintAll={handlePrintAll}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
           />
         )}
 
@@ -350,9 +457,33 @@ export default function App() {
             patients={patients}
             onNavigateToReferral={handleNavigateToReferral}
             onNavigateToStickerPrint={handleNavigateToStickerPrint}
+            onEditPatient={handleOpenEditModal}
+            onDeletePatient={handleOpenDeleteModal}
+            currentUser={currentUser}
           />
         )}
       </main>
+
+      {/* Admin Edit Modal */}
+      <EditPatientModal
+        patient={patientToEdit}
+        isOpen={Boolean(patientToEdit)}
+        onClose={handleCloseEditModal}
+        onSave={async (updated) => {
+          await handleUpdatePatient(updated);
+          setPatientToEdit(null);
+        }}
+        currentUser={currentUser}
+      />
+
+      {/* Admin Delete Confirmation Modal */}
+      <DeletePatientConfirmModal
+        patient={patientToDelete}
+        isOpen={Boolean(patientToDelete)}
+        onClose={handleCloseDeleteModal}
+        onConfirmDelete={handleConfirmDelete}
+        currentUser={currentUser}
+      />
 
       {/* Printable Referral Form Document (hidden on screen, active on Ctrl+P/print) */}
       <ReferralPrintDocument patients={patientsToPrint.length > 0 ? patientsToPrint : patients.filter(p => p.fitResult === 'positive')} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Hospital, Calendar, RotateCcw, Cloud, User, LogOut, Trash2 } from 'lucide-react';
+import { Activity, Hospital, Calendar, RotateCcw, Cloud, CloudOff, User, LogOut, Trash2 } from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface HeaderProps {
@@ -45,11 +45,18 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
                 
                 {/* Firebase Cloud Sync Badge */}
-                <span className="inline-flex items-center gap-1 bg-cyan-950/60 border border-cyan-400/40 text-cyan-200 text-[10px] px-2 py-0.2 rounded-full font-medium shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-                  <Cloud className="w-3 h-3 text-cyan-300" />
-                  <span className="hidden sm:inline">Firebase Cloud</span> ซิงค์สด
-                </span>
+                {isCloudConnected ? (
+                  <span className="inline-flex items-center gap-1 bg-cyan-950/60 border border-cyan-400/40 text-cyan-200 text-[10px] px-2 py-0.5 rounded-full font-medium shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                    <Cloud className="w-3 h-3 text-cyan-300" />
+                    <span className="hidden sm:inline">Firebase</span> ออนไลน์
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-amber-950/60 border border-amber-400/40 text-amber-200 text-[10px] px-2 py-0.5 rounded-full font-medium shadow-xs" title="ทำงานแบบออฟไลน์ด้วยข้อมูลในเครื่อง ระบบจะเชื่อมต่อใหม่อัตโนมัติ">
+                    <CloudOff className="w-3 h-3 text-amber-300" />
+                    <span>โหมดออฟไลน์</span>
+                  </span>
+                )}
               </div>
 
               <h1 className="text-sm sm:text-lg font-bold tracking-tight text-white truncate mt-0.5">

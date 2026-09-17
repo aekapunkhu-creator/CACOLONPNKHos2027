@@ -14,9 +14,16 @@ import {
   FileText,
   RotateCcw,
   Sparkles,
-  Info
+  Info,
+  Edit3,
+  Trash2,
+  Copy,
+  Plus,
+  Minus,
+  Layers
 } from 'lucide-react';
-import { PatientScreening } from '../types';
+import { PatientScreening, UserAccount } from '../types';
+import { VILLAGE_LIST } from '../data/villages';
 import { 
   generateHnQrCodeDataUrl, 
   exportStickersToPdf, 
@@ -28,11 +35,17 @@ import {
 interface StickerPrintViewProps {
   patients: PatientScreening[];
   initialSelectedHn?: string;
+  onEditPatient?: (patient: PatientScreening) => void;
+  onDeletePatient?: (patient: PatientScreening) => void;
+  currentUser?: UserAccount | null;
 }
 
 export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   patients,
-  initialSelectedHn
+  initialSelectedHn,
+  onEditPatient,
+  onDeletePatient,
+  currentUser
 }) => {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +84,11 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   // Zoom / Inspect Modal
   const [inspectedPatient, setInspectedPatient] = useState<PatientScreening | null>(null);
 
+  // Sticker Copies Configuration before print
+  const [copiesPerPatient, setCopiesPerPatient] = useState<number>(2);
+  const [customPatientCopies, setCustomPatientCopies] = useState<Record<string, number>>({});
+  const [singleModalCopies, setSingleModalCopies] = useState<number>(1);
+
   // Print Mode configuration for browser print
   const [printLayout, setPrintLayout] = useState<'roll' | 'a4'>('roll');
 
@@ -78,8 +96,9 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   const filteredPatients = useMemo(() => {
     return patients.filter(patient => {
       // Village filter
-      if (selectedVillage !== 'all' && patient.villageNo !== selectedVillage) {
-        return false;
+      if (selectedVillage !== 'all') {
+        const match = patient.villageNo === selectedVillage || (!isNaN(parseInt(patient.villageNo, 10)) && parseInt(patient.villageNo, 10) === parseInt(selectedVillage, 10));
+        if (!match) return false;
       }
 
       // Status filter
@@ -188,6 +207,27 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
     setSelectedIds(new Set());
   };
 
+  // Helper: Get expanded patient list based on configured copies per person
+  const expandedPatientsToPrint = useMemo(() => {
+    const result: Array<{ patient: PatientScreening; copyIndex: number; totalCopies: number }> = [];
+    selectedPatientsList.forEach(patient => {
+      const copies = customPatientCopies[patient.id] !== undefined ? customPatientCopies[patient.id] : copiesPerPatient;
+      for (let c = 1; c <= Math.max(1, copies); c++) {
+        result.push({ patient, copyIndex: c, totalCopies: copies });
+      }
+    });
+    return result;
+  }, [selectedPatientsList, customPatientCopies, copiesPerPatient]);
+
+  const totalStickersCount = expandedPatientsToPrint.length;
+
+  const handleUpdatePatientCopies = (patientId: string, count: number) => {
+    setCustomPatientCopies(prev => ({
+      ...prev,
+      [patientId]: Math.max(1, Math.min(20, count))
+    }));
+  };
+
   // PDF Export Handler
   const handleExportPdf = async (mode: 'roll' | 'a4') => {
     if (selectedPatientsList.length === 0) {
@@ -195,13 +235,15 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
       return;
     }
 
+    const itemsToExport = expandedPatientsToPrint.map(item => item.patient);
+
     setIsExportingPdf(true);
     setExportMode(mode);
-    setExportProgress({ current: 0, total: selectedPatientsList.length });
+    setExportProgress({ current: 0, total: itemsToExport.length });
 
     try {
       const blob = await exportStickersToPdf(
-        selectedPatientsList,
+        itemsToExport,
         mode,
         (current, total) => {
           setExportProgress({ current, total });
@@ -210,8 +252,8 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
 
       const timestamp = new Date().toISOString().slice(0, 10);
       const filename = mode === 'roll'
-        ? `Sticker-Roll-70x25mm-${selectedPatientsList.length}labels-${timestamp}.pdf`
-        : `Sticker-A4Sheet-${selectedPatientsList.length}labels-${timestamp}.pdf`;
+        ? `Sticker-Roll-70x25mm-${itemsToExport.length}labels-${timestamp}.pdf`
+        : `Sticker-A4Sheet-${itemsToExport.length}labels-${timestamp}.pdf`;
 
       downloadBlobAsFile(blob, filename);
     } catch (err: any) {
@@ -224,12 +266,16 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   };
 
   // Direct single-patient PDF export
-  const handleExportSinglePdf = async (patient: PatientScreening) => {
+  const handleExportSinglePdf = async (patient: PatientScreening, copies: number = 1) => {
     setIsExportingPdf(true);
     setExportMode('roll');
     try {
-      const blob = await exportStickersToPdf([patient], 'roll');
-      downloadBlobAsFile(blob, `Sticker-${patient.hn}-${patient.firstName}.pdf`);
+      const singleList: PatientScreening[] = [];
+      for (let i = 0; i < copies; i++) {
+        singleList.push(patient);
+      }
+      const blob = await exportStickersToPdf(singleList, 'roll');
+      downloadBlobAsFile(blob, `Sticker-${patient.hn}-${patient.firstName}-${copies}labels.pdf`);
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err?.message);
     } finally {
@@ -373,6 +419,87 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
           </div>
         </div>
 
+        {/* 2.5 Quantity & Copies Configuration Bar before Printing */}
+        <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 rounded-2xl border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-xs flex-shrink-0">
+              <Copy className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-emerald-950 flex flex-wrap items-center gap-2">
+                <span>กำหนดจำนวนสติกเกอร์ก่อนพิมพ์ (Copies per Person)</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-200/90 text-emerald-900 text-[11px] font-extrabold">
+                  พิมพ์คนละ {copiesPerPatient} ดวง
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-800 mt-0.5">
+                เลือกจำนวนดวงต่อคน: <strong>1 ดวง</strong> (ติดหลอดตรวจ) • <strong>2 ดวง</strong> (ติดหลอด + ซองส่งตรวจ/ใบนำส่ง) • <strong>3 ดวง</strong> (ติดแฟ้มประวัติ)
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Presets 1, 2, 3, 4, 5 */}
+            <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs">
+              {[1, 2, 3, 4, 5].map(num => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => {
+                    setCopiesPerPatient(num);
+                    setCustomPatientCopies({});
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    copiesPerPatient === num
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                >
+                  {num} ดวง
+                </button>
+              ))}
+            </div>
+
+            {/* Custom +/- controls */}
+            <div className="flex items-center border border-emerald-300 bg-white rounded-xl overflow-hidden shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCopiesPerPatient(Math.max(1, copiesPerPatient - 1))}
+                className="px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                title="ลดจำนวนดวงสติกเกอร์"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={copiesPerPatient}
+                onChange={(e) => setCopiesPerPatient(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                className="w-12 text-center text-xs font-bold text-emerald-900 border-none focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setCopiesPerPatient(Math.min(20, copiesPerPatient + 1))}
+                className="px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                title="เพิ่มจำนวนดวงสติกเกอร์"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Total stickers computed badge */}
+            <div className="px-3.5 py-2 bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 flex-shrink-0">
+              <Layers className="w-3.5 h-3.5 text-emerald-300" />
+              <span>ยอดพิมพ์รวม:</span>
+              <span className="font-mono text-sm underline decoration-emerald-400 decoration-2">
+                {totalStickersCount}
+              </span>
+              <span>ดวง</span>
+            </div>
+          </div>
+        </div>
+
         {/* 3. Filters & Quick Selection Bar */}
         <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
           {/* Filters */}
@@ -396,11 +523,15 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
               className="py-1.5 px-3 rounded-xl border border-slate-300 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">ทุกหมู่บ้าน ({patients.length})</option>
-              {villageList.map(v => (
-                <option key={v} value={v}>
-                  หมู่ที่ {v} ({patients.filter(p => p.villageNo === v).length} คน)
-                </option>
-              ))}
+              {villageList.map(v => {
+                const villageObj = VILLAGE_LIST.find(item => item.no === v || parseInt(item.no, 10) === parseInt(v, 10));
+                const count = patients.filter(p => p.villageNo === v || parseInt(p.villageNo, 10) === parseInt(v, 10)).length;
+                return (
+                  <option key={v} value={v}>
+                    หมู่ {v} {villageObj?.name || ''} ({count} คน)
+                  </option>
+                );
+              })}
             </select>
 
             {/* Kit Status Filter */}
@@ -498,6 +629,26 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
                     </label>
 
                     <div className="flex items-center gap-1">
+                      {onEditPatient && (
+                        <button
+                          type="button"
+                          onClick={() => onEditPatient(patient)}
+                          title="แก้ไขข้อมูลผู้ป่วย (Admin)"
+                          className="p-1 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {onDeletePatient && (
+                        <button
+                          type="button"
+                          onClick={() => onDeletePatient(patient)}
+                          title="ลบข้อมูลผู้ป่วย (Admin)"
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setInspectedPatient(patient)}
@@ -667,25 +818,50 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setInspectedPatient(null)}
-                className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
-              >
-                ปิดหน้าต่าง
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  handleExportSinglePdf(inspectedPatient);
-                  setInspectedPatient(null);
-                }}
-                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs"
-              >
-                <FileDown className="w-4 h-4" />
-                ดาวน์โหลดไฟล์ PDF ขนาด 7×2.5 cm
-              </button>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-700">จำนวนดวง:</span>
+                <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setSingleModalCopies(Math.max(1, singleModalCopies - 1))}
+                    className="px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  >
+                    -
+                  </button>
+                  <span className="px-2.5 py-1 text-xs font-mono font-bold text-emerald-800">
+                    {singleModalCopies} ดวง
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSingleModalCopies(Math.min(20, singleModalCopies + 1))}
+                    className="px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInspectedPatient(null)}
+                  className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold"
+                >
+                  ปิดหน้าต่าง
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportSinglePdf(inspectedPatient, singleModalCopies);
+                    setInspectedPatient(null);
+                  }}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                >
+                  <FileDown className="w-4 h-4" />
+                  <span>ดาวน์โหลด PDF ({singleModalCopies} ดวง)</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -696,95 +872,107 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
         {printLayout === 'roll' ? (
           // Continuous Roll layout: Each sticker is 70mm x 25mm on its own page
           <div className="sticker-roll-print-container">
-            {selectedPatientsList.map((patient) => (
-              <div 
-                key={`print-roll-${patient.id}`}
-                className="sticker-label-roll page-break"
-                style={{
-                  width: '70mm',
-                  height: '25mm',
-                  padding: '1.5mm',
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2mm',
-                  fontFamily: '"Prompt", "Sarabun", sans-serif',
-                  overflow: 'hidden'
-                }}
-              >
-                {/* QR Code */}
-                {qrCache[patient.id] && (
-                  <img 
-                    src={qrCache[patient.id]} 
-                    alt={patient.hn} 
-                    style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
-                  />
-                )}
-                {/* Text Details */}
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
-                  <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857' }}>
-                    รพ.โพนนาแก้ว • FIT Test
-                  </div>
-                  <div style={{ fontSize: '12pt', fontWeight: 'bold', color: '#000000', letterSpacing: '-0.3px' }}>
-                    HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
-                  </div>
-                  <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {patient.prefix}{patient.firstName} {patient.lastName}
-                  </div>
-                  <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''} {patient.subdistrict ? `ต.${patient.subdistrict}` : ''}
-                  </div>
-                  <div style={{ fontSize: '6pt', color: '#6B7280' }}>
-                    CID: {patient.idCard}
+            {expandedPatientsToPrint.map((item, idx) => {
+              const patient = item.patient;
+              return (
+                <div 
+                  key={`print-roll-${patient.id}-copy-${item.copyIndex}-${idx}`}
+                  className="sticker-label-roll page-break"
+                  style={{
+                    width: '70mm',
+                    height: '25mm',
+                    padding: '1.5mm',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '2mm',
+                    fontFamily: '"Prompt", "Sarabun", sans-serif',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* QR Code */}
+                  {qrCache[patient.id] && (
+                    <img 
+                      src={qrCache[patient.id]} 
+                      alt={patient.hn} 
+                      style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
+                    />
+                  )}
+                  {/* Text Details */}
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
+                    <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>รพ.โพนนาแก้ว • FIT Test</span>
+                      {item.totalCopies > 1 && (
+                        <span style={{ fontSize: '6pt', color: '#059669' }}>[{item.copyIndex}/{item.totalCopies}]</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12pt', fontWeight: 'bold', color: '#000000', letterSpacing: '-0.3px' }}>
+                      HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
+                    </div>
+                    <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {patient.prefix}{patient.firstName} {patient.lastName}
+                    </div>
+                    <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''} {patient.subdistrict ? `ต.${patient.subdistrict}` : ''}
+                    </div>
+                    <div style={{ fontSize: '6pt', color: '#6B7280' }}>
+                      CID: {patient.idCard}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           // A4 Grid Layout: 2 columns x 10 rows per sheet
           <div className="sticker-a4-sheet-container">
-            {selectedPatientsList.map((patient) => (
-              <div 
-                key={`print-a4-${patient.id}`}
-                className="sticker-label-a4"
-                style={{
-                  width: '70mm',
-                  height: '25mm',
-                  margin: '1.5mm',
-                  border: '0.5px dashed #ccc',
-                  padding: '1.5mm',
-                  boxSizing: 'border-box',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '2mm',
-                  fontFamily: '"Prompt", "Sarabun", sans-serif',
-                  overflow: 'hidden'
-                }}
-              >
-                {qrCache[patient.id] && (
-                  <img 
-                    src={qrCache[patient.id]} 
-                    alt={patient.hn} 
-                    style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
-                  />
-                )}
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
-                  <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857' }}>
-                    รพ.โพนนาแก้ว • FIT Test
-                  </div>
-                  <div style={{ fontSize: '11pt', fontWeight: 'bold', color: '#000000' }}>
-                    HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
-                  </div>
-                  <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {patient.prefix}{patient.firstName} {patient.lastName}
-                  </div>
-                  <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''}
+            {expandedPatientsToPrint.map((item, idx) => {
+              const patient = item.patient;
+              return (
+                <div 
+                  key={`print-a4-${patient.id}-copy-${item.copyIndex}-${idx}`}
+                  className="sticker-label-a4"
+                  style={{
+                    width: '70mm',
+                    height: '25mm',
+                    margin: '1.5mm',
+                    border: '0.5px dashed #ccc',
+                    padding: '1.5mm',
+                    boxSizing: 'border-box',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '2mm',
+                    fontFamily: '"Prompt", "Sarabun", sans-serif',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {qrCache[patient.id] && (
+                    <img 
+                      src={qrCache[patient.id]} 
+                      alt={patient.hn} 
+                      style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
+                    <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>รพ.โพนนาแก้ว • FIT Test</span>
+                      {item.totalCopies > 1 && (
+                        <span style={{ fontSize: '6pt', color: '#059669' }}>[{item.copyIndex}/{item.totalCopies}]</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11pt', fontWeight: 'bold', color: '#000000' }}>
+                      HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
+                    </div>
+                    <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {patient.prefix}{patient.firstName} {patient.lastName}
+                    </div>
+                    <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

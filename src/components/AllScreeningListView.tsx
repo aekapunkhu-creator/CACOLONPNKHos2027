@@ -13,19 +13,29 @@ import {
   Clock,
   Send,
   Printer,
-  Tag
+  Tag,
+  Edit3,
+  Trash2,
+  ShieldAlert
 } from 'lucide-react';
+import { UserAccount } from '../types';
 
 interface AllScreeningListViewProps {
   patients: PatientScreening[];
   onNavigateToReferral: (hn: string) => void;
   onNavigateToStickerPrint?: (hn: string) => void;
+  onEditPatient?: (patient: PatientScreening) => void;
+  onDeletePatient?: (patient: PatientScreening) => void;
+  currentUser?: UserAccount | null;
 }
 
 export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   patients,
   onNavigateToReferral,
-  onNavigateToStickerPrint
+  onNavigateToStickerPrint,
+  onEditPatient,
+  onDeletePatient,
+  currentUser
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterResult, setFilterResult] = useState<string>('all');
@@ -51,8 +61,10 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
     }
 
     // Village filter
-    if (filterVillage !== 'all' && p.villageNo !== filterVillage) {
-      return false;
+    if (filterVillage !== 'all') {
+      const match1 = p.villageNo === filterVillage;
+      const match2 = !isNaN(parseInt(p.villageNo, 10)) && parseInt(p.villageNo, 10) === parseInt(filterVillage, 10);
+      if (!match1 && !match2) return false;
     }
 
     return true;
@@ -237,6 +249,47 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                       <span>เปิดใบส่งตัวส่องกล้อง รพ.สกลนคร</span>
                     </button>
                   )}
+
+                  {/* Mobile Admin & Action Controls */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 gap-2">
+                    <div className="flex items-center gap-1">
+                      {onNavigateToStickerPrint && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigateToStickerPrint(p.hn)}
+                          className="px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-semibold flex items-center gap-1"
+                          title="พิมพ์สติกเกอร์"
+                        >
+                          <Tag className="w-3 h-3" />
+                          <span>สติกเกอร์</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {onEditPatient && (
+                        <button
+                          type="button"
+                          onClick={() => onEditPatient(p)}
+                          className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-semibold flex items-center gap-1"
+                          title="แก้ไขข้อมูลผู้ป่วย"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>แก้ไข</span>
+                        </button>
+                      )}
+                      {onDeletePatient && (
+                        <button
+                          type="button"
+                          onClick={() => onDeletePatient(p)}
+                          className="px-2.5 py-1 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded text-xs font-semibold flex items-center gap-1"
+                          title="ลบข้อมูลผู้ป่วย"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>ลบ</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
             })
@@ -260,12 +313,13 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                 <th className="px-3 py-3">ว/ด/ป ที่ตรวจ</th>
                 <th className="px-3 py-3 text-center">ผลตรวจคัดกรอง</th>
                 <th className="px-3 py-3 text-center">ส่งต่อ Colonoscopy</th>
+                <th className="px-3 py-3 text-center">จัดการ (Admin)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
                     ไม่พบข้อมูลผู้รับการตรวจคัดกรองตามเงื่อนไขที่ระบุ
                   </td>
                 </tr>
@@ -354,6 +408,30 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                             >
                               <Send className="w-3 h-3" />
                               <span>ส่งต่อ</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          {onEditPatient && (
+                            <button
+                              type="button"
+                              onClick={() => onEditPatient(p)}
+                              className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="แก้ไขข้อมูลผู้ป่วย (Admin)"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                            </button>
+                          )}
+                          {onDeletePatient && (
+                            <button
+                              type="button"
+                              onClick={() => onDeletePatient(p)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="ลบข้อมูลผู้ป่วย (Admin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
                             </button>
                           )}
                         </div>

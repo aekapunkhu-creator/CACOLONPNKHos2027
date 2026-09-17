@@ -18,14 +18,17 @@ import {
   UserCheck,
   Tag
 } from 'lucide-react';
+import { UserAccount } from '../types';
 
 interface RegistrationViewProps {
   patients: PatientScreening[];
   onAddPatient: (patient: PatientScreening) => void;
   onImportPatients: (imported: PatientScreening[]) => void;
-  onDeletePatient: (id: string) => void;
+  onDeletePatient: (patient: PatientScreening) => void;
+  onEditPatient?: (patient: PatientScreening) => void;
   onClearAllPatients?: () => void;
   onNavigateToStickerPrint?: (hn?: string) => void;
+  currentUser?: UserAccount | null;
 }
 
 export const RegistrationView: React.FC<RegistrationViewProps> = ({
@@ -33,8 +36,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   onAddPatient,
   onImportPatients,
   onDeletePatient,
+  onEditPatient,
   onClearAllPatients,
-  onNavigateToStickerPrint
+  onNavigateToStickerPrint,
+  currentUser
 }) => {
   const [activeTab, setActiveTab] = useState<'form' | 'excel'>('form');
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +48,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   // Form State
   const [formData, setFormData] = useState({
     hn: '',
-    villageNo: '1',
+    villageNo: '2',
     houseNo: '',
     prefix: 'นาย',
     firstName: '',
@@ -500,7 +505,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                 type="button"
                 onClick={() => setFormData({
                   hn: '',
-                  villageNo: '1',
+                  villageNo: '2',
                   houseNo: '',
                   prefix: 'นาย',
                   firstName: '',
@@ -734,19 +739,29 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                           <button
                             type="button"
                             onClick={() => onNavigateToStickerPrint(p.hn)}
-                            className="p-1 text-slate-400 hover:text-emerald-700 rounded transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
                             title="พิมพ์สติกเกอร์ 7x2.5 cm สำหรับผู้ป่วยรายนี้"
                           >
                             <Tag className="w-4 h-4" />
                           </button>
                         )}
+                        {onEditPatient && (
+                          <button
+                            type="button"
+                            onClick={() => onEditPatient(p)}
+                            className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="แก้ไขข้อมูลผู้ป่วย (Admin Edit)"
+                          >
+                            <Edit3 className="w-4 h-4 text-blue-600" />
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={() => onDeletePatient(p.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
-                          title="ลบรายการ"
+                          onClick={() => onDeletePatient(p)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="ลบข้อมูลผู้ป่วย (Admin Delete)"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 text-rose-500" />
                         </button>
                       </div>
                     </td>

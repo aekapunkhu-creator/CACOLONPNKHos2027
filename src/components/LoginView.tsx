@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { UserAccount } from '../types';
 import { authenticateUser } from '../data/users';
-import { Hospital, Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Hospital, Lock, User, Eye, EyeOff, ShieldCheck, AlertCircle, Smartphone } from 'lucide-react';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserAccount) => void;
+  onOpenVhvMobileMode?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, onOpenVhvMobileMode }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -142,6 +143,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <span>เข้าสู่ระบบ (Login)</span>
             )}
           </button>
+
+          {/* VHV Direct Mobile Link without Login */}
+          {onOpenVhvMobileMode && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenVhvMobileMode}
+                className="w-full py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2"
+              >
+                <Smartphone className="w-4 h-4 text-emerald-600" />
+                <span>สำหรับ อสม. บันทึกข้อมูลสุขภาพผ่านมือถือ (ไม่ต้อง Login)</span>
+              </button>
+            </div>
+          )}
 
           {/* Hospital System Footnote */}
           <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-400">

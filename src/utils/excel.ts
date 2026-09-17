@@ -164,14 +164,12 @@ export async function parseExcelPatients(file: File): Promise<PatientScreening[]
         }
 
         const villageNameMap: Record<string, string> = {
-          '1': 'บ้านโพนนาแก้ว',
-          '2': 'บ้านนาแก้ว',
-          '3': 'บ้านนาถ่อน',
-          '4': 'บ้านป่าปอ',
-          '5': 'บ้านน้อย',
-          '6': 'บ้านปุ่ง',
-          '7': 'บ้านคำเม็ก',
-          '8': 'บ้านดอนม่วง'
+          '2': 'บ้านนาเดื่อ',
+          '02': 'บ้านนาเดื่อ',
+          '3': 'บ้านกลาง',
+          '03': 'บ้านกลาง',
+          '10': 'บ้านกลางใหม่',
+          '11': 'บ้านนาเดื่อน้อย'
         };
 
         const patients: PatientScreening[] = rawRows.map((row, idx) => {
@@ -194,16 +192,17 @@ export async function parseExcelPatients(file: File): Promise<PatientScreening[]
           let hn = getVal(['hn', 'เลขhn', 'hospitalnumber', 'hnno', 'pid']) || `67-${String(idx + 1).padStart(5, '0')}`;
           
           // 2. Village & Address
-          let villageNo = getVal(['หมู่ที่', 'หมู่', 'villageno', 'moo', 'villagenumber']) || '1';
+          let rawVillageNo = getVal(['หมู่ที่', 'หมู่', 'villageno', 'moo', 'villagenumber']) || '2';
           // Extract numeric digits if user wrote 'หมู่ 1' or 'ม.1'
-          const villageMatch = villageNo.match(/\d+/);
+          const villageMatch = rawVillageNo.match(/\d+/);
+          let villageNo = '2';
           if (villageMatch) {
-            villageNo = villageMatch[0];
+            villageNo = String(parseInt(villageMatch[0], 10));
           }
           const villageNameInput = getVal(['หมู่บ้าน', 'ชื่อหมู่บ้าน', 'villagename']);
-          const villageName = villageNameInput || villageNameMap[villageNo] || `หมู่ที่ ${villageNo}`;
+          const villageName = villageNameMap[villageNo] || villageNameMap[rawVillageNo] || villageNameInput || `หมู่ที่ ${villageNo}`;
           const houseNo = getVal(['บ้านเลขที่', 'houseno', 'address', 'ที่อยู่']) || '-';
-          const subdistrict = getVal(['ตำบล', 'subdistrict', 'tambon']) || 'โพนนาแก้ว';
+          const subdistrict = getVal(['ตำบล', 'subdistrict', 'tambon']) || 'นาแก้ว';
 
           // 3. Name parsing (Support combined 'ชื่อ-สกุล' or split 'ชื่อ' / 'นามสกุล')
           let prefix = getVal(['คำนำหน้า', 'คำนำหน้านาม', 'prefix', 'title', 'pname']);

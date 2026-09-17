@@ -7,8 +7,9 @@ export interface PatientScreening {
   hn: string; // Hospital Number e.g. 67-00101
   villageNo: string; // หมู่ที่ e.g. "1", "2"
   houseNo: string; // บ้านเลขที่ e.g. "45/2"
-  subdistrict?: string; // ตำบล e.g. "นาแก้ว", "โพนนาแก้ว"
-  villageName?: string; // ชื่อหมู่บ้าน e.g. "บ้านโพนนาแก้ว"
+  subdistrict?: string; // ตำบล e.g. "นาแก้ว", "บ้านแป้น"
+  villageName?: string; // ชื่อหมู่บ้าน e.g. "นาเดื่อ"
+  healthCenter?: string; // หน่วยบริการสาธารณสุข e.g. "PCU โรงพยาบาลโพนนาแก้ว"
   prefix: string; // คำนำหน้า e.g. "นาย", "นาง", "นางสาว"
   firstName: string; // ชื่อ
   lastName: string; // นามสกุล
@@ -55,8 +56,11 @@ export interface PatientScreening {
 }
 
 export interface VillageSummary {
+  villageId?: string;
   villageNo: string;
   villageName: string;
+  subdistrict?: string;
+  healthCenter?: string;
   totalRegistered: number;
   totalTested: number;
   negativeCount: number;

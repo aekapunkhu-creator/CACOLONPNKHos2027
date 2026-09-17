@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "PatientScreening": {
+      "title": "PatientScreening",
+      "description": "FIT Test colorectal cancer screening patient record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "hn": { "type": "string", "description": "Hospital Number" },
+        "villageNo": { "type": "string", "description": "Moo / Village Number" },
+        "houseNo": { "type": "string", "description": "House address number" },
+        "subdistrict": { "type": "string", "description": "Subdistrict (Tambon)" },
+        "villageName": { "type": "string", "description": "Village name" },
+        "healthCenter": { "type": "string", "description": "Responsible health center" },
+        "prefix": { "type": "string", "description": "Name prefix" },
+        "firstName": { "type": "string", "description": "First name" },
+        "lastName": { "type": "string", "description": "Last name" },
+        "gender": { "type": "string", "enum": ["ชาย", "หญิง"], "description": "Gender" },
+        "ageYears": { "type": "number", "description": "Age in years" },
+        "ageMonths": { "type": "number", "description": "Age in months" },
+        "birthDate": { "type": "string", "description": "Date of birth (YYYY-MM-DD)" },
+        "idCard": { "type": "string", "description": "13-digit Thai national ID" },
+        "benefitCode": { "type": "string", "description": "Healthcare coverage code" },
+        "benefitName": { "type": "string", "description": "Healthcare coverage name" },
+        "underlyingDisease": { "type": "string", "description": "Underlying conditions" },
+        "kitStatus": { "type": "string", "enum": ["not_received", "received", "tested"], "description": "Kit status" },
+        "kitReceivedDate": { "type": "string", "description": "Date kit received" },
+        "heightCm": { "type": "number", "description": "Height in cm" },
+        "weightKg": { "type": "number", "description": "Weight in kg" },
+        "waistInch": { "type": "number", "description": "Waist circumference in inches" },
+        "waistCm": { "type": "number", "description": "Waist circumference in cm" },
+        "bloodPressureSys": { "type": "number", "description": "Systolic blood pressure" },
+        "bloodPressureDia": { "type": "number", "description": "Diastolic blood pressure" },
+        "bmi": { "type": "number", "description": "Body mass index" },
+        "fitResult": { "type": "string", "enum": ["positive", "negative", "inconclusive", "pending"], "description": "FIT Test result" },
+        "testedDate": { "type": "string", "description": "Test date" },
+        "testedBy": { "type": "string", "description": "Lab technician or tester" },
+        "testLotNo": { "type": "string", "description": "FIT Test reagent lot number" },
+        "notes": { "type": "string", "description": "Clinical notes" },
+        "referral": { "type": "object", "description": "Colonoscopy referral details" }
+      },
+      "required": ["id", "hn", "firstName", "lastName", "idCard"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "PatientScreening",
+      "description": "Hospital patient screening records for FIT Test"
+    }
+  }
+}

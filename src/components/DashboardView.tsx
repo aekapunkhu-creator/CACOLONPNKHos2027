@@ -11,18 +11,42 @@ import {
   Building2, 
   ArrowUpRight,
   TrendingUp,
-  Percent
+  Percent,
+  Search,
+  Edit3,
+  Trash2,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
+import { UserAccount } from '../types';
 
 interface DashboardViewProps {
   patients: PatientScreening[];
   onNavigateToTab: (tabId: any) => void;
+  onEditPatient?: (patient: PatientScreening) => void;
+  onDeletePatient?: (patient: PatientScreening) => void;
+  currentUser?: UserAccount | null;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   patients,
-  onNavigateToTab
+  onNavigateToTab,
+  onEditPatient,
+  onDeletePatient,
+  currentUser
 }) => {
+  const [adminSearchQuery, setAdminSearchQuery] = React.useState('');
+  const isAdmin = currentUser?.role === 'admin';
+
+  const adminMatchedPatients = useMemo(() => {
+    if (!adminSearchQuery.trim()) return [];
+    const q = adminSearchQuery.toLowerCase().trim();
+    return patients.filter(p => 
+      p.hn.toLowerCase().includes(q) || 
+      `${p.prefix}${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+      p.idCard.includes(q)
+    ).slice(0, 5);
+  }, [patients, adminSearchQuery]);
   const stats = useMemo(() => {
     const totalRegistered = patients.length;
     const totalReceivedKits = patients.filter(p => p.kitStatus === 'received' || p.kitStatus === 'tested').length;
@@ -59,7 +83,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     // Populate with patient data
     patients.forEach(p => {
-      const vNo = p.villageNo || '1';
+      const rawNo = (p.villageNo || '').trim();
+      const matchNo = rawNo.match(/\d+/);
+      const vNo = matchNo ? String(parseInt(matchNo[0], 10)) : (rawNo || '2');
       if (!villageMap[vNo]) {
         villageMap[vNo] = {
           villageNo: vNo,
@@ -405,6 +431,93 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
       </div>
+
+      {/* Admin Quick Patient Search & Action Section */}
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/40 to-slate-50 border border-blue-200/80 rounded-2xl p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  สิทธิ์ผู้ดูแลระบบ (Admin): ค้นหาและจัดการแก้ไข/ลบข้อมูลผู้ป่วยด่วน
+                </h3>
+                <p className="text-xs text-slate-500">
+                  ค้นหาจาก HN, เลขบัตรประชาชน หรือชื่อ-สกุล เพื่อแก้ไขข้อมูลหรือลบรายการได้ทันที
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigateToTab('all-list')}
+              className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1 self-start sm:self-auto hover:underline"
+            >
+              <span>ดูรายชื่อผู้ป่วยทั้งหมด ({patients.length} ราย)</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="relative max-w-xl">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={adminSearchQuery}
+              onChange={(e) => setAdminSearchQuery(e.target.value)}
+              placeholder="พิมพ์ค้นหา HN, เลขบัตร 13 หลัก, หรือชื่อ-สกุลผู้ป่วย..."
+              className="w-full pl-10 pr-4 py-2 bg-white rounded-xl border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+            />
+          </div>
+
+          {adminMatchedPatients.length > 0 && (
+            <div className="mt-3 divide-y divide-blue-100 bg-white rounded-xl border border-blue-200 overflow-hidden shadow-xs">
+              {adminMatchedPatients.map((p) => (
+                <div key={p.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-800 font-mono text-xs font-bold flex items-center justify-center border border-emerald-200">
+                      HN
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-emerald-900">{p.hn}</span>
+                        <span className="text-xs font-bold text-slate-900">{p.prefix}{p.firstName} {p.lastName}</span>
+                        <span className="text-[11px] text-slate-400">• CID: {p.idCard}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        ม.{p.villageNo} {p.villageName} | อายุ {p.ageYears} ปี | สิทธิ: {p.benefitName}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {onEditPatient && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPatient(p)}
+                        className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>แก้ไขข้อมูล</span>
+                      </button>
+                    )}
+                    {onDeletePatient && (
+                      <button
+                        type="button"
+                        onClick={() => onDeletePatient(p)}
+                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>ลบ</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Village Breakdown Table & Comparison (ข้อมูลคัดกรองแยกรายหมู่บ้าน) */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">

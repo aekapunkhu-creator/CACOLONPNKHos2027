@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PatientScreening, FitResultType } from '../types';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
+import { FitResultPopupModal } from './FitResultPopupModal';
 import { 
   FlaskConical, 
   Camera, 
@@ -13,8 +14,12 @@ import {
   ArrowRight,
   Sparkles,
   Clock,
-  Send
+  Send,
+  Edit3,
+  Trash2,
+  Zap
 } from 'lucide-react';
+import { UserAccount } from '../types';
 
 interface ResultEntryViewProps {
   patients: PatientScreening[];
@@ -22,6 +27,9 @@ interface ResultEntryViewProps {
   onUpdatePatient: (updated: PatientScreening) => void;
   onNavigateToReferral: (hn?: string) => void;
   currentUserName?: string;
+  onEditPatient?: (patient: PatientScreening) => void;
+  onDeletePatient?: (patient: PatientScreening) => void;
+  currentUser?: UserAccount | null;
 }
 
 export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
@@ -29,7 +37,10 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
   initialHn,
   onUpdatePatient,
   onNavigateToReferral,
-  currentUserName
+  currentUserName,
+  onEditPatient,
+  onDeletePatient,
+  currentUser
 }) => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [selectedHn, setSelectedHn] = useState<string>(initialHn || '');
@@ -39,8 +50,18 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
   const [notes, setNotes] = useState('');
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string; isPositive?: boolean; patientHn?: string } | null>(null);
 
+  // Result Selection Pop-up Modal State
+  const [isResultModalOpen, setIsResultModalOpen] = useState(false);
+  const [patientForResultModal, setPatientForResultModal] = useState<PatientScreening | null>(null);
+
   // Find currently selected patient
   const selectedPatient = patients.find(p => p.hn.toLowerCase() === selectedHn.toLowerCase()) || null;
+
+  const handleOpenResultModal = (patient: PatientScreening) => {
+    setSelectedHn(patient.hn);
+    setPatientForResultModal(patient);
+    setIsResultModalOpen(true);
+  };
 
   const handleScanSuccess = (scannedCode: string) => {
     setIsScannerOpen(false);
@@ -50,11 +71,10 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
     );
 
     if (matched) {
-      setSelectedHn(matched.hn);
-      setNotes(matched.notes || '');
+      handleOpenResultModal(matched);
       setNotification({
         type: 'success',
-        message: `สแกนสำเร็จ! พบข้อมูลผู้ป่วย: HN ${matched.hn} (${matched.prefix}${matched.firstName} ${matched.lastName})`
+        message: `สแกนสำเร็จ! พบข้อมูลผู้ป่วย: HN ${matched.hn} (${matched.prefix}${matched.firstName} ${matched.lastName}) - เปิดหน้าต่างเลือกผลตรวจอัตโนมัติ`
       });
     } else {
       setNotification({
@@ -120,6 +140,78 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
         isPositive: true,
         patientHn: updated.hn,
         message: `บันทึกผล "Positive (ผลบวก)" รหัส 1B0061 สำหรับ HN: ${updated.hn} เรียบร้อยแล้ว (สร้างใบส่งต่อไปยัง รพ.สกลนคร)`
+      });
+    } else if (result === 'negative') {
+      setNotification({
+        type: 'success',
+        message: `บันทึกผล "Negative (ผลลบ)" รหัส 1B0060 สำหรับ HN: ${updated.hn} สำเร็จ (นัดตรวจซ้ำอีก 2 ปี)`
+      });
+    } else {
+      setNotification({
+        type: 'success',
+        message: `บันทึกผล "Inconclusive (ออกผลไม่ได้)" สำหรับ HN: ${updated.hn} สำเร็จ (แนะนำให้เก็บตัวอย่างซ้ำ)`
+      });
+    }
+  };
+
+  const handleModalSelectResultAutoSave = (
+    patient: PatientScreening,
+    result: FitResultType,
+    customLotNo: string,
+    customTestedBy: string,
+    customNotes: string
+  ) => {
+    const nowStr = new Date().toLocaleString('th-TH', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    let autoReferral = patient.referral;
+    if (result === 'positive' && !autoReferral) {
+      const refCount = patients.filter(p => p.referral).length + 1;
+      const refNo = `PNK-REF-2569-${String(refCount).padStart(3, '0')}`;
+      
+      const apptDate = new Date();
+      apptDate.setDate(apptDate.getDate() + 14);
+      const apptDateStr = apptDate.toISOString().split('T')[0];
+
+      autoReferral = {
+        referralNo: refNo,
+        destinationHospital: 'โรงพยาบาลสกลนคร',
+        department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร (Endoscopy Unit)',
+        appointmentDate: apptDateStr,
+        appointmentTime: '09:00',
+        referralReason: 'ตรวจคัดกรองมะเร็งลำไส้ใหญ่ด้วยวิธี FIT Test ได้ผลบวก (Positive Code 1B0061)',
+        referralDoctor: 'นพ.อภิชาติ ปัญญาเลิศ (ว.45892)',
+        bowelPrepInstruction: 'รับยาระบาย Swiff/Klean-Prep ตามใบคำแนะนำ งดอาหารกากใย 3 วันก่อนวันนัด และงดน้ำงดอาหารหลังเที่ยงคืน',
+        status: 'pending_referral',
+        createdDate: nowStr
+      };
+    }
+
+    const updated: PatientScreening = {
+      ...patient,
+      kitStatus: 'tested',
+      fitResult: result,
+      testedDate: nowStr,
+      testedBy: customTestedBy.trim() || testedBy.trim() || 'เจ้าหน้าที่ห้องแล็บ รพ.โพนนาแก้ว',
+      testLotNo: customLotNo.trim() || lotNo.trim(),
+      notes: customNotes.trim() || (result === 'positive' ? 'พบผลบวก (Positive 1B0061)' : result === 'negative' ? 'ผลลบ (Negative 1B0060)' : 'ออกผลไม่ได้ (Inconclusive)'),
+      referral: autoReferral
+    };
+
+    onUpdatePatient(updated);
+    setSelectedHn(updated.hn);
+
+    if (result === 'positive') {
+      setNotification({
+        type: 'success',
+        isPositive: true,
+        patientHn: updated.hn,
+        message: `บันทึกผล "Positive (ผลบวก)" รหัส 1B0061 สำหรับ HN: ${updated.hn} เรียบร้อยแล้ว (สร้างใบส่งต่อไปยัง รพ.สกลนคร อัตโนมัติ)`
       });
     } else if (result === 'negative') {
       setNotification({
@@ -284,9 +376,49 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center justify-between mt-1">
                         <span>ม.{p.villageNo} {p.villageName} (อายุ {p.ageYears} ปี)</span>
-                        <span className="text-slate-400 text-[10px]">
-                          {p.kitStatus === 'tested' ? 'บันทึกแล้ว' : p.kitStatus === 'received' ? 'รับชุดตรวจแล้ว' : 'ยังไม่ส่งชุด'}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenResultModal(p);
+                            }}
+                            className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-bold rounded-md flex items-center gap-1 transition-colors shadow-2xs"
+                            title="เปิด Pop-up บันทึกผลตรวจและ Auto Save"
+                          >
+                            <FlaskConical className="w-3 h-3" />
+                            <span>ผลตรวจ (Popup)</span>
+                          </button>
+                          <span className="text-slate-400 text-[10px]">
+                            {p.kitStatus === 'tested' ? 'บันทึกแล้ว' : p.kitStatus === 'received' ? 'รับชุดแล้ว' : 'ยังไม่ส่งชุด'}
+                          </span>
+                          {onEditPatient && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditPatient(p);
+                              }}
+                              className="p-1 hover:bg-blue-100 text-slate-400 hover:text-blue-600 rounded"
+                              title="แก้ไขข้อมูลผู้ป่วย"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                          )}
+                          {onDeletePatient && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeletePatient(p);
+                              }}
+                              className="p-1 hover:bg-rose-100 text-slate-400 hover:text-rose-600 rounded"
+                              title="ลบข้อมูลผู้ป่วย"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -306,9 +438,43 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
                     <UserCheck className="w-4 h-4 text-emerald-600" />
                     ผู้ป่วยที่สแกนพบ (พร้อมบันทึกผลตรวจ)
                   </span>
-                  <span className="font-mono font-bold text-base text-emerald-900 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300">
-                    HN: {selectedPatient.hn}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenResultModal(selectedPatient)}
+                      className="px-3 py-1 bg-gradient-to-r from-purple-700 to-indigo-800 hover:from-purple-800 hover:to-indigo-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                      title="เปิด Pop-up เลือกผลตรวจและ Auto Save ทันที"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                      <span>เปิด Pop-up ผลตรวจ (Auto Save)</span>
+                    </button>
+
+                    <span className="font-mono font-bold text-base text-emerald-900 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300">
+                      HN: {selectedPatient.hn}
+                    </span>
+                    {onEditPatient && (
+                      <button
+                        type="button"
+                        onClick={() => onEditPatient(selectedPatient)}
+                        className="px-2 py-1 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                        title="แก้ไขข้อมูลผู้ป่วย"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>แก้ไข</span>
+                      </button>
+                    )}
+                    {onDeletePatient && (
+                      <button
+                        type="button"
+                        onClick={() => onDeletePatient(selectedPatient)}
+                        className="px-2 py-1 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shadow-2xs"
+                        title="ลบข้อมูลผู้ป่วย"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>ลบ</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="text-xl font-bold text-slate-900 mt-1">
@@ -528,6 +694,16 @@ export const ResultEntryView: React.FC<ResultEntryViewProps> = ({
         title="สแกน Barcode / QR อ่าน HN ออกผลตรวจ"
         description="หันกล้องไปที่บาร์โค้ดบนหลอดสิ่งส่งตรวจหรือบัตรผู้ป่วย"
         patients={patients}
+      />
+
+      {/* Pop-up Modal: Select FIT Result with Instant Auto-Save */}
+      <FitResultPopupModal
+        isOpen={isResultModalOpen}
+        onClose={() => setIsResultModalOpen(false)}
+        patient={patientForResultModal || selectedPatient}
+        onSelectResultAutoSave={handleModalSelectResultAutoSave}
+        defaultLotNo={lotNo}
+        defaultTestedBy={testedBy}
       />
     </div>
   );
