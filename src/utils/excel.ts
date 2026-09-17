@@ -37,15 +37,17 @@ export function exportScreeningToExcel(patients: PatientScreening[], filename = 
       'สิทธิการรักษา': p.benefitName,
       'โรคประจำตัว': p.underlyingDisease || 'ไม่มี',
       'สถานะชุดตรวจ': p.kitStatus === 'tested' ? 'ตรวจแล้ว' : (p.kitStatus === 'received' ? 'ส่งชุดตรวจแล้ว' : 'ยังไม่ส่งชุดตรวจ'),
+      'วันที่ส่งชุด/บันทึกสุขภาพ': p.kitReceivedDate || '-',
       'ส่วนสูง (ซม.)': p.heightCm || '-',
       'น้ำหนัก (กก.)': p.weightKg || '-',
       'รอบเอว': waist,
       'ความดันโลหิต': bp,
       'BMI': p.bmi ? p.bmi.toFixed(1) : '-',
-      'ว/ด/ป ที่ตรวจ': p.testedDate || '-',
+      'ว/ด/ป ที่ตรวจแล็บ': p.testedDate || '-',
       'ผลตรวจคัดกรอง': resultThai,
       'รหัสเบิกจ่าย สปสช.': codeThai,
       'ผู้ตรวจ/เจ้าหน้าที่': p.testedBy || '-',
+      'หมายเหตุ/ผู้บันทึก': p.notes || '-',
       'สถานะการส่งต่อส่องกล้อง': p.referral ? `ส่งต่อ รพ.สกลนคร (${p.referral.appointmentDate || 'รอนัด'})` : (p.fitResult === 'positive' ? 'รอส่งต่อ' : '-')
     };
   });

@@ -16,7 +16,8 @@ import {
   Tag,
   Edit3,
   Trash2,
-  ShieldAlert
+  ShieldAlert,
+  HeartPulse
 } from 'lucide-react';
 import { UserAccount } from '../types';
 
@@ -26,6 +27,7 @@ interface AllScreeningListViewProps {
   onNavigateToStickerPrint?: (hn: string) => void;
   onEditPatient?: (patient: PatientScreening) => void;
   onDeletePatient?: (patient: PatientScreening) => void;
+  onSelectPatientForVitals?: (patient: PatientScreening) => void;
   currentUser?: UserAccount | null;
 }
 
@@ -35,10 +37,12 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   onNavigateToStickerPrint,
   onEditPatient,
   onDeletePatient,
+  onSelectPatientForVitals,
   currentUser
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterResult, setFilterResult] = useState<string>('all');
+  const [filterKitStatus, setFilterKitStatus] = useState<string>('all');
   const [filterVillage, setFilterVillage] = useState<string>('all');
 
   const filteredPatients = patients.filter((p) => {
@@ -58,6 +62,13 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
       if (filterResult === 'positive' && p.fitResult !== 'positive') return false;
       if (filterResult === 'negative' && p.fitResult !== 'negative') return false;
       if (filterResult === 'inconclusive' && p.fitResult !== 'inconclusive') return false;
+    }
+
+    // Kit Status & Vitals filter
+    if (filterKitStatus !== 'all') {
+      const hasVitalsOrReceived = p.kitStatus === 'received' || p.kitStatus === 'tested' || !!p.heightCm || !!p.weightKg || !!p.bloodPressureSys;
+      if (filterKitStatus === 'received' && !hasVitalsOrReceived) return false;
+      if (filterKitStatus === 'not_received' && hasVitalsOrReceived) return false;
     }
 
     // Village filter
@@ -117,7 +128,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
         </div>
 
         {/* Filter Controls */}
-        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Search Box */}
           <div className="relative">
             <input
@@ -137,11 +148,24 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
               onChange={(e) => setFilterResult(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="all">ผลตรวจทั้งหมด ({patients.length})</option>
+              <option value="all">ผลตรวจคัดกรองทั้งหมด</option>
               <option value="positive">เฉพาะ ผลบวก Positive (1B0061)</option>
               <option value="negative">เฉพาะ ผลลบ Negative (1B0060)</option>
               <option value="inconclusive">เฉพาะ ออกผลไม่ได้ (Inconclusive)</option>
-              <option value="pending">เฉพาะ ยังไม่ได้ตรวจ/รอผล</option>
+              <option value="pending">เฉพาะ รอผลแล็บ/ยังไม่ได้ตรวจ</option>
+            </select>
+          </div>
+
+          {/* Filter by Kit Status & Vitals */}
+          <div>
+            <select
+              value={filterKitStatus}
+              onChange={(e) => setFilterKitStatus(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="all">สถานะชุดตรวจ/สุขภาพทั้งหมด</option>
+              <option value="received">เฉพาะ ส่งชุดตรวจ / บันทึกสุขภาพแล้ว</option>
+              <option value="not_received">เฉพาะ ยังไม่ส่งชุดตรวจ</option>
             </select>
           </div>
 
@@ -169,7 +193,11 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
           <span className="text-slate-600 font-medium">
             แสดง <strong className="text-slate-900 font-bold">{filteredPatients.length}</strong> จากทั้งหมด {patients.length} รายการ
           </span>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="flex items-center gap-1 text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+              ส่งชุด/บันทึกสุขภาพแล้ว: {patients.filter(p => p.kitStatus === 'received' || p.kitStatus === 'tested' || !!p.heightCm || !!p.weightKg || !!p.bloodPressureSys).length} ราย
+            </span>
             <span className="flex items-center gap-1 text-rose-700 font-semibold bg-rose-50 px-2 py-0.5 rounded-md">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
               Positive: {filteredPatients.filter(p => p.fitResult === 'positive').length}
@@ -198,7 +226,24 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                     <span className="font-mono font-bold text-xs text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                       HN: {p.hn}
                     </span>
-                    <div>
+                    <div className="flex items-center gap-1.5">
+                      {p.kitStatus === 'tested' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          ตรวจแล้ว
+                        </span>
+                      ) : (p.kitStatus === 'received' || p.heightCm || p.weightKg || p.bloodPressureSys) ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                          <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                          บันทึกสุขภาพแล้ว
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                          <Clock className="w-3 h-3 text-amber-500" />
+                          ยังไม่ส่งชุด
+                        </span>
+                      )}
+
                       {p.fitResult === 'positive' ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
@@ -215,7 +260,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-600">
-                          รอผลตรวจ
+                          รอผลแล็บ
                         </span>
                       )}
                     </div>
@@ -233,10 +278,10 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                   <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-200/60">
                     <div><span className="text-slate-400">เลขบัตร:</span> <span className="font-mono">{p.idCard}</span></div>
                     <div><span className="text-slate-400">ที่อยู่:</span> {p.houseNo} ม.{p.villageNo}</div>
-                    <div><span className="text-slate-400">สส./นน.:</span> {p.heightCm || '-'}ซม. / {p.weightKg || '-'}กก.</div>
+                    <div><span className="text-slate-400">สส./นน.:</span> {p.heightCm ? `${p.heightCm} ซม.` : '-'} / {p.weightKg ? `${p.weightKg} กก.` : '-'}</div>
                     <div><span className="text-slate-400">เอว:</span> {waist}</div>
                     <div><span className="text-slate-400">BP:</span> <span className="font-mono">{bp}</span></div>
-                    <div><span className="text-slate-400">วันที่ตรวจ:</span> {p.testedDate || '-'}</div>
+                    <div><span className="text-slate-400">วันที่:</span> {p.testedDate || (p.kitReceivedDate ? `บันทึก: ${p.kitReceivedDate}` : '-')}</div>
                   </div>
 
                   {p.fitResult === 'positive' && (
@@ -253,6 +298,17 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                   {/* Mobile Admin & Action Controls */}
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 gap-2">
                     <div className="flex items-center gap-1">
+                      {onSelectPatientForVitals && (
+                        <button
+                          type="button"
+                          onClick={() => onSelectPatientForVitals(p)}
+                          className="px-2.5 py-1 bg-emerald-600 text-white hover:bg-emerald-700 rounded text-xs font-semibold flex items-center gap-1 shadow-xs"
+                          title="บันทึกข้อมูลสุขภาพ อสม."
+                        >
+                          <HeartPulse className="w-3 h-3" />
+                          <span>บันทึกสุขภาพ</span>
+                        </button>
+                      )}
                       {onNavigateToStickerPrint && (
                         <button
                           type="button"
@@ -306,6 +362,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                 <th className="px-4 py-3">ชื่อ-สกุล</th>
                 <th className="px-3 py-3">เลขที่บัตรประชาชน</th>
                 <th className="px-3 py-3">บ้านเลขที่</th>
+                <th className="px-3 py-3 text-center">สถานะชุดตรวจ/สุขภาพ</th>
                 <th className="px-3 py-3 text-right">ส่วนสูง</th>
                 <th className="px-3 py-3 text-right">น้ำหนัก</th>
                 <th className="px-3 py-3 text-right">รอบเอว</th>
@@ -313,13 +370,13 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                 <th className="px-3 py-3">ว/ด/ป ที่ตรวจ</th>
                 <th className="px-3 py-3 text-center">ผลตรวจคัดกรอง</th>
                 <th className="px-3 py-3 text-center">ส่งต่อ Colonoscopy</th>
-                <th className="px-3 py-3 text-center">จัดการ (Admin)</th>
+                <th className="px-3 py-3 text-center">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={14} className="px-4 py-12 text-center text-slate-400">
                     ไม่พบข้อมูลผู้รับการตรวจคัดกรองตามเงื่อนไขที่ระบุ
                   </td>
                 </tr>
@@ -348,6 +405,29 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                       <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
                         {p.houseNo} ม.{p.villageNo}
                       </td>
+                      <td className="px-3 py-3 text-center whitespace-nowrap">
+                        {p.kitStatus === 'tested' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            ตรวจแล็บแล้ว
+                          </span>
+                        ) : (p.kitStatus === 'received' || p.heightCm || p.weightKg || p.bloodPressureSys) ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                              <CheckCircle2 className="w-3 h-3 text-blue-600" />
+                              ส่งชุด/บันทึกแล้ว
+                            </span>
+                            {p.kitReceivedDate && (
+                              <span className="text-[9px] text-blue-600 font-mono mt-0.5">{p.kitReceivedDate}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            ยังไม่ส่งชุดตรวจ
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-right font-mono text-slate-700">
                         {p.heightCm ? `${p.heightCm} ซม.` : '-'}
                       </td>
@@ -361,7 +441,19 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                         {bp}
                       </td>
                       <td className="px-3 py-3 text-slate-600 whitespace-nowrap">
-                        {p.testedDate || '-'}
+                        {p.testedDate ? (
+                          <div>
+                            <span className="font-medium text-slate-800">{p.testedDate}</span>
+                            <div className="text-[10px] text-slate-400">ตรวจแล็บ</div>
+                          </div>
+                        ) : p.kitReceivedDate ? (
+                          <div>
+                            <span className="font-medium text-blue-700">{p.kitReceivedDate}</span>
+                            <div className="text-[10px] text-blue-500">บันทึกข้อมูลสุขภาพ</div>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         {p.fitResult === 'positive' ? (
@@ -381,7 +473,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
-                            รอผลตรวจ
+                            รอผลแล็บ
                           </span>
                         )}
                       </td>
@@ -414,6 +506,17 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
+                          {onSelectPatientForVitals && (
+                            <button
+                              type="button"
+                              onClick={() => onSelectPatientForVitals(p)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-semibold transition-colors"
+                              title="บันทึกข้อมูลสุขภาพ อสม. (สัญญาณชีพ นน./สส./ความดัน)"
+                            >
+                              <HeartPulse className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>บันทึกสุขภาพ</span>
+                            </button>
+                          )}
                           {onEditPatient && (
                             <button
                               type="button"
