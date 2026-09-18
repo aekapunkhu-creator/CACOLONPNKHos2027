@@ -494,7 +494,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span>
-              หน่วยบริการ <strong>โรงพยาบาลโพนนาแก้ว จ.สกลนคร</strong> • ระบบคัดกรอง FIT Test มะเร็งลำไส้ใหญ่
+              จัดทำโดย <strong className="text-slate-800">นายเอกพันธ์ ขันติ</strong> • นักวิชาการสาธารณสุข กลุ่มงานบริการด้านปฐมภูมิและองค์รวม โรงพยาบาลโพนนาแก้ว
             </span>
           </div>
           <div className="flex items-center gap-3 text-slate-400">
