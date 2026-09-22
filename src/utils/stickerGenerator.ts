@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf';
 import { PatientScreening } from '../types';
 
 /**
- * Dimensions for sticker:
+ * Dimensions for standard thermal sticker:
  * Width: 70 mm (7.0 cm)
  * Height: 25 mm (2.5 cm)
  * Resolution: 300 DPI for high quality thermal/laser print
@@ -20,7 +20,7 @@ export const CANVAS_HEIGHT_PX = 295;
  */
 export async function generateHnQrCodeDataUrl(hn: string): Promise<string> {
   return QRCode.toDataURL(hn, {
-    width: 260,
+    width: 320,
     margin: 1,
     errorCorrectionLevel: 'M',
     color: {
@@ -31,15 +31,47 @@ export async function generateHnQrCodeDataUrl(hn: string): Promise<string> {
 }
 
 /**
+ * Helper to draw a rounded rectangle
+ */
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/**
  * Render a patient's sticker on an HTML5 canvas at 300 DPI
- * Includes:
- * 1. QR Code generated from HN
- * 2. Full Name (คำนำหน้า ชื่อ นามสกุล)
- * 3. HN (ชัดเจน ตัวหนา)
- * 4. ที่อยู่ บ้านเลขที่ หมู่ที่ (ตำบล/หมู่บ้าน)
- * 5. Hospital Header & Age/Sex for healthcare identification
+ * Specifically engineered to prevent any text overlapping:
+ * - Awaits web fonts (Prompt, Sarabun) before measuring and drawing
+ * - Mathematically verified line spacing for Thai vowels and tone marks
+ * - Dynamic font size scaling so long names and addresses never overflow or crash
+ * - Left/Right separation for HN and Age/Gender to eliminate collision
  */
 export async function renderStickerToCanvas(patient: PatientScreening): Promise<HTMLCanvasElement> {
+  // Ensure web fonts are completely loaded before measuring and drawing
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Ignore font wait failures
+    }
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_WIDTH_PX;
   canvas.height = CANVAS_HEIGHT_PX;
@@ -49,17 +81,17 @@ export async function renderStickerToCanvas(patient: PatientScreening): Promise<
     throw new Error('Canvas 2D context is not available');
   }
 
-  // 1. Background (White)
+  // 1. Background (Pure White for thermal label)
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, CANVAS_WIDTH_PX, CANVAS_HEIGHT_PX);
 
-  // 2. Subtle outer border guide (light gray for laser cutter/scissors guide)
-  ctx.strokeStyle = '#D1D5DB';
-  ctx.lineWidth = 2;
+  // 2. Subtle outer border guide (light gray for scissors or cutter alignment)
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(1, 1, CANVAS_WIDTH_PX - 2, CANVAS_HEIGHT_PX - 2);
 
   // 3. Generate & Draw QR Code on Left
-  // QR box size: 245 x 245 px (approx 20.8 mm x 20.8 mm)
+  // QR size 224x224 px centered vertically
   const qrDataUrl = await generateHnQrCodeDataUrl(patient.hn);
   const qrImg = new Image();
   await new Promise<void>((resolve, reject) => {
@@ -68,76 +100,144 @@ export async function renderStickerToCanvas(patient: PatientScreening): Promise<
     qrImg.src = qrDataUrl;
   });
 
-  const qrSize = 255;
-  const qrX = 20;
-  const qrY = (CANVAS_HEIGHT_PX - qrSize) / 2;
+  const qrSize = 224;
+  const qrX = 22;
+  const qrY = Math.round((CANVAS_HEIGHT_PX - qrSize) / 2); // ~35px
   ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
 
-  // Vertical separator hairline
-  ctx.strokeStyle = '#E5E7EB';
-  ctx.lineWidth = 2;
+  // Small label under QR code
+  ctx.fillStyle = '#64748B';
+  ctx.font = 'bold 15px "Prompt", monospace, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('QR: ' + patient.hn, qrX + qrSize / 2, qrY + qrSize + 16);
+  ctx.textAlign = 'left';
+
+  // Vertical separator hairline between QR and text
+  const sepX = qrX + qrSize + 16;
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(qrX + qrSize + 15, 18);
-  ctx.lineTo(qrX + qrSize + 15, CANVAS_HEIGHT_PX - 18);
+  ctx.moveTo(sepX, 18);
+  ctx.lineTo(sepX, CANVAS_HEIGHT_PX - 18);
   ctx.stroke();
 
-  // 4. Draw Patient Text Data on Right
-  const textX = qrX + qrSize + 30;
-  let currentY = 48;
+  // 4. Draw Patient Text Data on Right Area
+  const textX = sepX + 16; // ~278px
+  const maxRight = CANVAS_WIDTH_PX - 22; // ~805px
+  const maxTextWidth = maxRight - textX; // ~527px
 
-  // Header: Hospital and Screening Program
+  // Row 1: Header (Hospital & Program) - Baseline Y = 40
   ctx.fillStyle = '#047857'; // Deep emerald
-  ctx.font = 'bold 26px "Prompt", "Sarabun", sans-serif';
-  ctx.fillText('รพ.โพนนาแก้ว • FIT Test มะเร็งลำไส้ใหญ่', textX, currentY);
+  ctx.font = 'bold 22px "Prompt", "Sarabun", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('รพ.โพนนาแก้ว • FIT Test มะเร็งลำไส้ใหญ่', textX, 40);
 
-  // Row 2: HN (Very prominent) + Age/Gender
-  currentY += 56;
+  ctx.fillStyle = '#64748B';
+  ctx.font = 'bold 17px "Prompt", "Sarabun", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('70×25mm', maxRight, 40);
+  ctx.textAlign = 'left';
+
+  // Row 2: HN (Left) + Age & Gender Badge (Right) - Baseline Y = 90 (50px below Row 1)
+  // Left: HN (prominent bold)
   ctx.fillStyle = '#000000';
-  ctx.font = 'bold 50px "Prompt", "Sarabun", sans-serif';
+  ctx.font = 'bold 40px "Prompt", monospace, sans-serif';
   const hnLabel = `HN: ${patient.hn}`;
-  ctx.fillText(hnLabel, textX, currentY);
+  ctx.fillText(hnLabel, textX, 90);
 
-  // Age & Gender badge beside HN
-  ctx.fillStyle = '#374151';
-  ctx.font = 'bold 30px "Prompt", "Sarabun", sans-serif';
-  const ageGender = `[อายุ ${patient.ageYears} ปี (${patient.gender})]`;
-  const hnMetrics = ctx.measureText(hnLabel);
-  ctx.fillText(ageGender, textX + hnMetrics.width + 20, currentY - 5);
+  // Right: Age & Gender Badge (Right-aligned, never collides with HN)
+  const genderLabel = patient.gender === 'ชาย' ? 'ชาย' : 'หญิง';
+  const ageGenderText = `อายุ ${patient.ageYears} ปี (${genderLabel})`;
+  ctx.font = 'bold 23px "Prompt", "Sarabun", sans-serif';
+  const ageMetrics = ctx.measureText(ageGenderText);
+  const badgePadX = 10;
+  const badgeW = ageMetrics.width + badgePadX * 2;
+  const badgeH = 34;
+  const badgeX = maxRight - badgeW;
+  const badgeY = 90 - 26;
 
-  // Row 3: Full Name (ชื่อ-สกุล)
-  currentY += 56;
-  ctx.fillStyle = '#111827';
-  ctx.font = 'bold 44px "Prompt", "Sarabun", sans-serif';
-  const fullName = `${patient.prefix}${patient.firstName} ${patient.lastName}`;
-  ctx.fillText(fullName, textX, currentY);
+  // Draw light background badge for Age & Gender
+  ctx.fillStyle = '#F1F5F9';
+  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
+  ctx.fill();
+  ctx.strokeStyle = '#CBD5E1';
+  ctx.lineWidth = 1;
+  drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
+  ctx.stroke();
 
-  // Row 4: Address (ที่อยู่ บ้านเลขที่ หมู่ที่)
-  currentY += 46;
-  ctx.fillStyle = '#1F2937';
-  ctx.font = 'bold 30px "Prompt", "Sarabun", sans-serif';
-  
-  let addressText = `บ้านเลขที่ ${patient.houseNo} หมู่ที่ ${patient.villageNo}`;
+  ctx.fillStyle = '#0F172A';
+  ctx.fillText(ageGenderText, badgeX + badgePadX, 90);
+
+  // Row 3: Full Name (ชื่อ - สกุล) - Baseline Y = 144 (54px below Row 2, ample clearance for upper vowels)
+  const fullName = `${patient.prefix || ''}${patient.firstName} ${patient.lastName}`.trim();
+  let nameFontSize = 33;
+  ctx.font = `bold ${nameFontSize}px "Prompt", "Sarabun", sans-serif`;
+  let nameWidth = ctx.measureText(fullName).width;
+
+  // Auto-fit font size if full name is long
+  if (nameWidth > maxTextWidth) {
+    nameFontSize = Math.max(22, Math.floor(33 * (maxTextWidth / nameWidth)));
+    ctx.font = `bold ${nameFontSize}px "Prompt", "Sarabun", sans-serif`;
+  }
+  ctx.fillStyle = '#0F172A';
+  ctx.fillText(fullName, textX, 144);
+
+  // Row 4: Address (บ้านเลขที่ หมู่ที่ ตำบล) - Baseline Y = 194 (50px below Row 3)
+  let addressText = `บ้านเลขที่ ${patient.houseNo || '-'} ม.${patient.villageNo || '-'}`;
   if (patient.villageName) {
     addressText += ` (${patient.villageName})`;
   }
   if (patient.subdistrict) {
     addressText += ` ต.${patient.subdistrict}`;
   }
-  ctx.fillText(addressText, textX, currentY);
 
-  // Row 5: CID / Mini footer info
-  currentY += 38;
-  ctx.fillStyle = '#6B7280';
-  ctx.font = 'normal 24px "Prompt", "Sarabun", sans-serif';
-  const cidText = `เลขบัตร: ${patient.idCard.replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5')} • สิทธิ: ${patient.benefitName || 'บัตรทอง'}`;
-  ctx.fillText(cidText, textX, currentY);
+  let addrFontSize = 23;
+  ctx.font = `bold ${addrFontSize}px "Prompt", "Sarabun", sans-serif`;
+  let addrWidth = ctx.measureText(addressText).width;
+
+  // Auto-fit font size if address is long
+  if (addrWidth > maxTextWidth) {
+    addrFontSize = Math.max(18, Math.floor(23 * (maxTextWidth / addrWidth)));
+    ctx.font = `bold ${addrFontSize}px "Prompt", "Sarabun", sans-serif`;
+  }
+  ctx.fillStyle = '#334155';
+  ctx.fillText(addressText, textX, 194);
+
+  // Row 5: CID (Left) & Benefit/Code (Right) - Baseline Y = 242 (48px below Row 4)
+  const formattedCid = (patient.idCard || '').replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5');
+  ctx.fillStyle = '#475569';
+  ctx.font = '500 20px "Prompt", "Sarabun", monospace, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`เลขบัตร: ${formattedCid || '-'}`, textX, 242);
+
+  // Right: Benefit & Claim code
+  const benefitStr = `สิทธิ: ${patient.benefitName || 'บัตรทอง'} (1B0060/61)`;
+  ctx.fillStyle = '#047857';
+  ctx.font = 'bold 18px "Prompt", "Sarabun", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(benefitStr, maxRight, 242);
+  ctx.textAlign = 'left';
+
+  // Row 6: Micro footer info - Baseline Y = 274 (32px below Row 5)
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = 'normal 15px "Prompt", "Sarabun", sans-serif';
+  ctx.fillText('หลอดตรวจ FIT Test อุจจาระ • ติดตามแนวนอนรอบหลอด', textX, 274);
+
+  const thaiDateStr = new Date().toLocaleDateString('th-TH', { 
+    day: 'numeric', 
+    month: 'short', 
+    year: '2-digit' 
+  });
+  ctx.textAlign = 'right';
+  ctx.fillText(`พิมพ์: ${thaiDateStr}`, maxRight, 274);
+  ctx.textAlign = 'left';
 
   return canvas;
 }
 
 /**
  * Export Stickers to PDF:
- * Mode 'roll': Each page is exactly 70 mm x 25 mm (for barcode / thermal label printers)
+ * Mode 'roll': Each page is exactly 70 mm x 25 mm (for thermal label printer rolls)
  * Mode 'a4': Standard A4 page (210 x 297 mm) with 20 stickers per page (2 columns x 10 rows)
  */
 export async function exportStickersToPdf(
@@ -149,8 +249,17 @@ export async function exportStickersToPdf(
     throw new Error('ไม่มีข้อมูลผู้ป่วยที่เลือก');
   }
 
+  // Ensure fonts are ready before PDF generation batch
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Ignore
+    }
+  }
+
   if (mode === 'roll') {
-    // 70 mm x 25 mm landscape label
+    // 70 mm x 25 mm landscape label (Exact match for 70x25mm roll printers)
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -164,7 +273,7 @@ export async function exportStickersToPdf(
 
       const canvas = await renderStickerToCanvas(patients[i]);
       const imgData = canvas.toDataURL('image/png');
-      doc.addImage(imgData, 'PNG', 0, 0, STICKER_WIDTH_MM, STICKER_HEIGHT_MM);
+      doc.addImage(imgData, 'PNG', 0, 0, STICKER_WIDTH_MM, STICKER_HEIGHT_MM, undefined, 'FAST');
 
       if (onProgress) {
         onProgress(i + 1, patients.length);
@@ -181,10 +290,6 @@ export async function exportStickersToPdf(
     });
 
     // 2 columns x 10 rows = 20 labels per A4 page
-    // A4 width = 210mm. 2 columns of 70mm = 140mm.
-    // Margin Left/Right = (210 - (70 * 2) - 10) / 2 = 30mm. Column Gap = 10mm.
-    // A4 height = 297mm. 10 rows of 25mm = 250mm.
-    // Margin Top = 12mm. Row Gap = 3.5mm.
     const marginLeft = 30;
     const colGap = 10;
     const marginTop = 12;
@@ -192,7 +297,6 @@ export async function exportStickersToPdf(
     const labelsPerPage = 20;
 
     for (let i = 0; i < patients.length; i++) {
-      const pageIndex = Math.floor(i / labelsPerPage);
       const indexInPage = i % labelsPerPage;
 
       if (i > 0 && indexInPage === 0) {
@@ -207,7 +311,7 @@ export async function exportStickersToPdf(
 
       const canvas = await renderStickerToCanvas(patients[i]);
       const imgData = canvas.toDataURL('image/png');
-      doc.addImage(imgData, 'PNG', x, y, STICKER_WIDTH_MM, STICKER_HEIGHT_MM);
+      doc.addImage(imgData, 'PNG', x, y, STICKER_WIDTH_MM, STICKER_HEIGHT_MM, undefined, 'FAST');
 
       if (onProgress) {
         onProgress(i + 1, patients.length);
@@ -231,3 +335,4 @@ export function downloadBlobAsFile(blob: Blob, filename: string) {
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+

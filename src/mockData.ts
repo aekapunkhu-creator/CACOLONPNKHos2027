@@ -16,6 +16,7 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     ageMonths: 4,
     birthDate: '1968-05-12',
     idCard: '3470500123451',
+    phone: '081-456-7890',
     benefitCode: 'UCS',
     benefitName: 'บัตรทอง (UC)',
     underlyingDisease: 'ความดันโลหิตสูง',
@@ -44,6 +45,32 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
       bowelPrepInstruction: 'รับยาระบาย Swiff/Klean-Prep ตามใบคำแนะนำ งดอาหารกากใย 3 วันก่อนวันนัด และงดน้ำงดอาหารหลังเที่ยงคืน',
       status: 'referred',
       createdDate: '2026-09-12 14:00'
+    },
+    caTracking: {
+      status: 'scheduled',
+      fitPositiveDate: '2026-09-11',
+      contactDate: '2026-09-12 14:00',
+      contactOfficer: 'นายเอกพันธ์ ขันติ (นวก.สาธารณสุข)',
+      contactNotes: 'โทรแจ้งผลบวก ผู้ป่วยเข้าใจดี ยินยอมตรวจส่องกล้อง',
+      callLogs: [
+        {
+          id: 'call-1',
+          date: '2026-09-12 14:00',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '081-456-7890',
+          outcome: 'answered_agreed',
+          notes: 'แจ้งผล FIT Positive แนะนำกระบวนการส่องกล้อง ผู้ป่วยยินยอมให้นัดตรวจ'
+        }
+      ],
+      appointmentDate: '2026-09-28',
+      appointmentTime: '08:30',
+      hospitalName: 'โรงพยาบาลสกลนคร',
+      department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร (Endoscopy Unit)',
+      bowelPrepStatus: 'received_meds',
+      bowelPrepNotes: 'รับยาระบาย Swiff 2 ขวด พร้อมเอกสารคำแนะนำแล้ว แนะนำงดอาหารกากใย 3 วันก่อนตรวจ',
+      companionName: 'นางมาลี วงค์อินทร์ (ภรรยา)',
+      companionPhone: '089-876-5432',
+      clinicalNotes: 'มีประวัติความดันโลหิตสูง ควบคุมได้ดี ไม่ได้รับประทานยาละลายลิ่มเลือด'
     }
   },
   {
@@ -61,6 +88,7 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     ageMonths: 1,
     birthDate: '1964-08-05',
     idCard: '3470500123460',
+    phone: '086-123-4567',
     benefitCode: 'UCS',
     benefitName: 'บัตรทอง (UC)',
     underlyingDisease: 'เบาหวานชนิดที่ 2',
@@ -94,6 +122,7 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     ageMonths: 8,
     birthDate: '1961-01-14',
     idCard: '3470500123478',
+    phone: '085-789-0123',
     benefitCode: 'OFC',
     benefitName: 'ข้าราชการ/เบิกตรง',
     underlyingDisease: 'ไขมันในเลือดสูง',
@@ -127,6 +156,7 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     ageMonths: 11,
     birthDate: '1972-10-20',
     idCard: '3470500123486',
+    phone: '089-234-5678',
     benefitCode: 'UCS',
     benefitName: 'บัตรทอง (UC)',
     underlyingDisease: 'ไม่มี',
@@ -143,18 +173,21 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     testedDate: '2026-09-11 10:30',
     testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
     testLotNo: 'FIT-202609A',
-    notes: 'Positive ชัดเจน ส่งต่อตรวจส่องกล้อง',
-    referral: {
-      referralNo: 'PNK-REF-2569-002',
-      destinationHospital: 'โรงพยาบาลสกลนคร',
-      department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร (Endoscopy Unit)',
-      appointmentDate: '2026-09-30',
-      appointmentTime: '09:00',
-      referralReason: 'ตรวจคัดกรองมะเร็งลำไส้ใหญ่ด้วยวิธี FIT Test ได้ผลบวก (Positive Code 1B0061)',
-      referralDoctor: 'พญ.ชลธิชา มั่นคง (ว.51204)',
-      bowelPrepInstruction: 'รับยาระบาย Swiff/Klean-Prep ตามคู่มือ งดผักผลไม้เมล็ดพืช 3 วันก่อนตรวจ',
-      status: 'pending_referral',
-      createdDate: '2026-09-12 15:30'
+    notes: 'Positive ชัดเจน รอส่งต่อตรวจส่องกล้อง',
+    caTracking: {
+      status: 'pending_contact',
+      fitPositiveDate: '2026-09-11',
+      callLogs: [
+        {
+          id: 'call-2',
+          date: '2026-09-14 10:30',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '089-234-5678',
+          outcome: 'no_answer',
+          notes: 'โทรครั้งที่ 1 สัญญาณติดแต่ไม่มีผู้รับสาย'
+        }
+      ],
+      clinicalNotes: '⚠️ เกินกำหนด 7 วันยังไม่สามารถติดต่อยืนยันวันนัดได้ ประสาน อสม. ม.2 (นางพยอม) ช่วยติดตามที่บ้าน'
     }
   },
   {
@@ -441,6 +474,203 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     underlyingDisease: 'ไม่มี',
     kitStatus: 'not_received',
     fitResult: 'pending'
+  },
+  {
+    id: 'pt-014',
+    hn: '67-00114',
+    villageNo: '1',
+    villageName: 'บ้านโพนนาแก้ว',
+    houseNo: '58/2',
+    subdistrict: 'นาแก้ว',
+    prefix: 'นาง',
+    firstName: 'คำมูล',
+    lastName: 'มิ่งขวัญ',
+    gender: 'หญิง',
+    ageYears: 63,
+    ageMonths: 2,
+    birthDate: '1963-07-15',
+    idCard: '3470500123583',
+    phone: '087-654-3210',
+    benefitCode: 'UCS',
+    benefitName: 'บัตรทอง (UC)',
+    underlyingDisease: 'เบาหวานชนิดที่ 2',
+    kitStatus: 'tested',
+    kitReceivedDate: '2026-09-04 09:00',
+    fitResult: 'positive',
+    testedDate: '2026-09-05 11:00',
+    testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
+    testLotNo: 'FIT-202609A',
+    notes: 'พบเลือดแฝงในอุจจาระชัดเจน ส่งส่องกล้องแล้ว',
+    caTracking: {
+      status: 'biopsy_reported',
+      fitPositiveDate: '2026-09-05',
+      contactDate: '2026-09-06 10:00',
+      contactOfficer: 'นายเอกพันธ์ ขันติ',
+      contactNotes: 'ประสานนัดด่วนรพ.สกลนคร ผู้ป่วยและญาติพร้อมรับการตรวจ',
+      appointmentDate: '2026-09-15',
+      appointmentTime: '08:30',
+      hospitalName: 'โรงพยาบาลสกลนคร',
+      department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร',
+      bowelPrepStatus: 'prep_completed',
+      bowelPrepNotes: 'เตรียมลำไส้สะอาดดีมาก (Boston Bowel Prep Score = 8)',
+      colonoscopyDate: '2026-09-15',
+      colonoscopyHospital: 'โรงพยาบาลสกลนคร',
+      colonoscopyDoctor: 'นพ.อภิชาติ ปัญญาเลิศ',
+      colonoscopyFinding: 'polyps_removed',
+      colonoscopyDetails: 'พบ Sessile polyp ขนาด 1.2 cm ที่ Sigmoid colon และ Pedunculated polyp ขนาด 0.8 cm ที่ Ascending colon ทำ Polypectomy ตัดออกได้ทั้งหมด ไม่มีภาวะแทรกซ้อน',
+      polypCount: 2,
+      polypSizeLocation: 'Sigmoid colon (1.2 cm) และ Ascending colon (0.8 cm)',
+      biopsyDate: '2026-09-20',
+      biopsyResult: 'tubular_adenoma',
+      biopsyDetails: 'ผลพยาธิวิทยา: Tubular adenoma with low-grade dysplasia, surgical margins are free of dysplasia',
+      treatmentPlan: 'แนะนำตรวจส่องกล้องซ้ำ (Surveillance Colonoscopy) ในอีก 3 ปี พร้อมดูแลสุขภาพสม่ำเสมอ',
+      clinicalNotes: 'ผู้ป่วยฟื้นตัวดีมาก ไม่มีอาการปวดท้องหรือถ่ายเป็นเลือด ให้คำแนะนำเรื่องอาหารกากใย'
+    }
+  },
+  {
+    id: 'pt-015',
+    hn: '67-00115',
+    villageNo: '5',
+    villageName: 'บ้านหนองหวาย',
+    houseNo: '19',
+    subdistrict: 'นาแก้ว',
+    prefix: 'นาย',
+    firstName: 'วิชัย',
+    lastName: 'อุ่นแสง',
+    gender: 'ชาย',
+    ageYears: 56,
+    ageMonths: 9,
+    birthDate: '1969-12-04',
+    idCard: '3470500123591',
+    phone: '084-555-1234',
+    benefitCode: 'UCS',
+    benefitName: 'บัตรทอง (UC)',
+    underlyingDisease: 'ไม่มี',
+    kitStatus: 'tested',
+    fitResult: 'positive',
+    testedDate: '2026-09-18 10:40',
+    testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
+    testLotNo: 'FIT-202609B',
+    notes: 'Positive พบ 2 ขีด แจ้งเจ้าหน้าที่ติดตามด่วน',
+    caTracking: {
+      status: 'contacted',
+      fitPositiveDate: '2026-09-18',
+      contactDate: '2026-09-19 13:30',
+      contactOfficer: 'นายเอกพันธ์ ขันติ',
+      contactNotes: 'โทรแจ้งผลบวก ผู้ป่วยรับทราบและยินยอมตรวจ อยู่ระหว่างประสานคิวนัดศูนย์ส่องกล้อง รพ.สกลนคร',
+      callLogs: [
+        {
+          id: 'call-15',
+          date: '2026-09-19 13:30',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '084-555-1234',
+          outcome: 'answered_agreed',
+          notes: 'รับสาย ยินยอมตรวจส่องกล้อง ขอนัดช่วงปลายเดือนหรือต้นเดือนหน้า'
+        }
+      ],
+      clinicalNotes: 'รอทาง รพ.สกลนคร ยืนยันคิวนัดตรวจส่องกล้องประจำสัปดาห์ถัดไป'
+    }
+  },
+  {
+    id: 'pt-016',
+    hn: '67-00116',
+    villageNo: '4',
+    villageName: 'บ้านโพนแคใต้',
+    houseNo: '102',
+    subdistrict: 'นาแก้ว',
+    prefix: 'นาง',
+    firstName: 'คำผิว',
+    lastName: 'ศรีบุญมี',
+    gender: 'หญิง',
+    ageYears: 66,
+    ageMonths: 5,
+    birthDate: '1960-04-18',
+    idCard: '3470500123605',
+    phone: '082-999-4455',
+    benefitCode: 'UCS',
+    benefitName: 'บัตรทอง (UC)',
+    underlyingDisease: 'ข้อเข่าเสื่อม, ความดันโลหิตสูง',
+    kitStatus: 'tested',
+    fitResult: 'positive',
+    testedDate: '2026-09-10 14:20',
+    testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
+    testLotNo: 'FIT-202609A',
+    notes: 'Positive แจ้งเตือนผู้ป่วยปฏิเสธ',
+    caTracking: {
+      status: 'refused',
+      fitPositiveDate: '2026-09-10',
+      contactDate: '2026-09-13 11:00',
+      contactOfficer: 'นายเอกพันธ์ ขันติ',
+      contactNotes: 'ผู้ป่วยแจ้งว่ากลัวเจ็บมาก และไม่มีญาติพาไป รพ.สกลนคร จึงขอปฏิเสธการส่องกล้อง',
+      callLogs: [
+        {
+          id: 'call-16',
+          date: '2026-09-13 11:00',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '082-999-4455',
+          outcome: 'answered_refused',
+          notes: 'ให้ข้อมูลเรื่องยาระงับความรู้สึกและการดูแล แต่ผู้ป่วยยังยืนยันปฏิเสธ'
+        }
+      ],
+      clinicalNotes: 'ผู้ป่วยปฏิเสธการส่องกล้อง อธิบายความเสี่ยงเรื่องมะเร็งระยะเริ่มต้นแล้วยังไม่ยินยอม ประสานทีมหมอครอบครัวและ อสม. ร่วมลงเยี่ยมบ้านให้กำลังใจและสร้างความเข้าใจเพิ่มเติม'
+    }
+  },
+  {
+    id: 'pt-017',
+    hn: '67-00117',
+    villageNo: '8',
+    villageName: 'บ้านท่าแร่ใต้',
+    houseNo: '33',
+    subdistrict: 'นาแก้ว',
+    prefix: 'นาย',
+    firstName: 'ประดิษฐ์',
+    lastName: 'คำภา',
+    gender: 'ชาย',
+    ageYears: 59,
+    ageMonths: 1,
+    birthDate: '1967-08-22',
+    idCard: '3470500123613',
+    phone: '090-333-6677',
+    benefitCode: 'UCS',
+    benefitName: 'บัตรทอง (UC)',
+    underlyingDisease: 'ไม่มี',
+    kitStatus: 'tested',
+    fitResult: 'positive',
+    testedDate: '2026-09-09 09:15',
+    testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
+    testLotNo: 'FIT-202609A',
+    notes: 'Positive 2 ขีดชัดเจน โทรติดต่อไม่ได้ 3 ครั้ง',
+    caTracking: {
+      status: 'cannot_contact',
+      fitPositiveDate: '2026-09-09',
+      callLogs: [
+        {
+          id: 'call-17a',
+          date: '2026-09-11 09:30',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '090-333-6677',
+          outcome: 'no_answer',
+          notes: 'ไม่มีผู้รับสาย'
+        },
+        {
+          id: 'call-17b',
+          date: '2026-09-13 14:00',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '090-333-6677',
+          outcome: 'no_answer',
+          notes: 'ปิดเครื่อง/ไม่สามารถติดต่อได้'
+        },
+        {
+          id: 'call-17c',
+          date: '2026-09-16 10:15',
+          caller: 'นายเอกพันธ์ ขันติ',
+          phone: '090-333-6677',
+          outcome: 'no_answer',
+          notes: 'โทรไม่ติด ติดต่อไม่ได้'
+        }
+      ],
+      clinicalNotes: '⚠️ เกินกำหนด 7 วัน โทร 3 ครั้งไม่สามารถติดต่อได้ ส่งรายชื่อให้ รพ.สต. และ อสม. ม.8 ติดตามตัวผู้ป่วยที่บ้านโดยตรง'
+    }
   }
 ];
 

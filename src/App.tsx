@@ -17,6 +17,7 @@ import { StickerPrintView } from './components/StickerPrintView';
 import { SampleReceiveView } from './components/SampleReceiveView';
 import { ResultEntryView } from './components/ResultEntryView';
 import { ReferralView } from './components/ReferralView';
+import { CaColonTrackingView } from './components/CaColonTrackingView';
 import { AllScreeningListView } from './components/AllScreeningListView';
 import { ReferralPrintDocument } from './components/ReferralPrintDocument';
 import { LoginView } from './components/LoginView';
@@ -308,6 +309,17 @@ export default function App() {
   const pendingKitCount = patients.filter(p => p.kitStatus === 'not_received').length;
   const positiveCount = patients.filter(p => p.fitResult === 'positive').length;
 
+  const overdueCount = patients.filter(p => {
+    if (p.fitResult !== 'positive' && !p.referral && !p.caTracking) return false;
+    const fitDateStr = p.caTracking?.fitPositiveDate || p.testedDate?.slice(0, 10);
+    if (!fitDateStr) return false;
+    const fitDate = new Date(fitDateStr);
+    const now = new Date('2026-09-21');
+    const diffDays = Math.floor((now.getTime() - fitDate.getTime()) / (1000 * 60 * 60 * 24));
+    const status = p.caTracking?.status || 'pending_contact';
+    return diffDays > 7 && (status === 'pending_contact' || status === 'contacted' || status === 'cannot_contact');
+  }).length;
+
   const handleExitVhvMode = () => {
     setIsVhvMode(false);
     if (typeof window !== 'undefined') {
@@ -369,6 +381,7 @@ export default function App() {
         }}
         pendingKitCount={pendingKitCount}
         positiveCount={positiveCount}
+        overdueCount={overdueCount}
       />
 
       {/* Cloud Sync Toast Notification */}
@@ -449,6 +462,14 @@ export default function App() {
             onEditPatient={handleOpenEditModal}
             onDeletePatient={handleOpenDeleteModal}
             currentUser={currentUser}
+            onNavigateToTracking={() => setActiveTab('ca-colon-tracking')}
+          />
+        )}
+
+        {activeTab === 'ca-colon-tracking' && (
+          <CaColonTrackingView
+            patients={patients}
+            onUpdatePatient={handleUpdatePatient}
           />
         )}
 
@@ -485,8 +506,10 @@ export default function App() {
         currentUser={currentUser}
       />
 
-      {/* Printable Referral Form Document (hidden on screen, active on Ctrl+P/print) */}
-      <ReferralPrintDocument patients={patientsToPrint.length > 0 ? patientsToPrint : patients.filter(p => p.fitResult === 'positive')} />
+      {/* Printable Referral Form Document (only active when on referral tab or when referral print is triggered) */}
+      {(activeTab === 'referral' || (patientsToPrint.length > 0 && activeTab !== 'sticker-print')) && (
+        <ReferralPrintDocument patients={patientsToPrint.length > 0 ? patientsToPrint : patients.filter(p => p.fitResult === 'positive')} />
+      )}
 
       {/* Desktop Footer (Hidden on mobile phones to save screen estate) */}
       <footer className="hidden sm:block bg-white border-t border-slate-200 py-3.5 text-center text-xs text-slate-500 no-print">

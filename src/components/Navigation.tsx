@@ -6,7 +6,8 @@ import {
   FlaskConical, 
   FileText, 
   Users,
-  Printer
+  Printer,
+  Stethoscope
 } from 'lucide-react';
 
 export type TabId = 
@@ -16,6 +17,7 @@ export type TabId =
   | 'sample-receive'
   | 'result-entry'
   | 'referral'
+  | 'ca-colon-tracking'
   | 'all-list';
 
 interface NavigationProps {
@@ -23,13 +25,15 @@ interface NavigationProps {
   onSelectTab: (tab: TabId) => void;
   pendingKitCount: number;
   positiveCount: number;
+  overdueCount?: number;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   onSelectTab,
   pendingKitCount,
-  positiveCount
+  positiveCount,
+  overdueCount = 0
 }) => {
   const tabs = [
     {
@@ -83,8 +87,17 @@ export const Navigation: React.FC<NavigationProps> = ({
       badgeColor: 'bg-rose-100 text-rose-700'
     },
     {
+      id: 'ca-colon-tracking' as TabId,
+      name: '7. ติดตาม CA Colon',
+      shortName: 'ติดตาม CA',
+      desc: 'ผู้ป่วยสงสัย & Patient Journey',
+      icon: Stethoscope,
+      badge: overdueCount > 0 ? `${overdueCount} เกินกำหนด` : (positiveCount > 0 ? `${positiveCount}` : null),
+      badgeColor: overdueCount > 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-amber-100 text-amber-800'
+    },
+    {
       id: 'all-list' as TabId,
-      name: '7. รายชื่อทั้งหมด',
+      name: '8. รายชื่อทั้งหมด',
       shortName: 'รายชื่อ',
       desc: 'ตารางข้อมูลครบ & ส่งออก Excel',
       icon: Users,

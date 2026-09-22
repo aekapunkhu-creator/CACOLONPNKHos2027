@@ -28,6 +28,7 @@ import {
   generateHnQrCodeDataUrl, 
   exportStickersToPdf, 
   downloadBlobAsFile,
+  renderStickerToCanvas,
   STICKER_WIDTH_MM,
   STICKER_HEIGHT_MM
 } from '../utils/stickerGenerator';
@@ -84,6 +85,26 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
 
   // Zoom / Inspect Modal
   const [inspectedPatient, setInspectedPatient] = useState<PatientScreening | null>(null);
+  const [inspectedCanvasUrl, setInspectedCanvasUrl] = useState<string | null>(null);
+
+  // Render high-res sticker preview when modal opens
+  useEffect(() => {
+    if (inspectedPatient) {
+      let active = true;
+      renderStickerToCanvas(inspectedPatient).then(canvas => {
+        if (active) {
+          setInspectedCanvasUrl(canvas.toDataURL('image/png'));
+        }
+      }).catch(err => {
+        console.error('Error rendering inspected sticker canvas:', err);
+      });
+      return () => {
+        active = false;
+      };
+    } else {
+      setInspectedCanvasUrl(null);
+    }
+  }, [inspectedPatient]);
 
   // Sticker Copies Configuration before print
   const [copiesPerPatient, setCopiesPerPatient] = useState<number>(2);
@@ -298,50 +319,82 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header & Technical Specification Banner */}
-      <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 text-white rounded-2xl p-5 sm:p-7 shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold backdrop-blur-xs border border-emerald-400/30">
-              <Tag className="w-3.5 h-3.5" />
-              <span>พิมพ์สติกเกอร์หลอดเก็บสิ่งส่งตรวจ (Specimen Tube Labels)</span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-              <Printer className="w-6 h-6 text-emerald-400" />
-              ระบบพิมพ์สติกเกอร์ ขนาด 7.0 cm × 2.5 cm
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              สติกเกอร์มาตรฐานพร้อม <strong>QR Code จากเลข HN</strong>, <strong>ชื่อ-สกุล</strong>, <strong>เลข HN ชัดเจน</strong> และ <strong>ที่อยู่บ้านเลขที่ หมู่ที่</strong> สำหรับติดบนหลอดเก็บอุจจาระ FIT Test และซองส่งตรวจ รองรับทั้งเครื่องพิมพ์ฉลากความร้อนแบบม้วน (Thermal) และเครื่องพิมพ์ทั่วไป (กระดาษ A4)
-            </p>
-          </div>
+    <div>
+      {/* Dynamic @media print @page style for browser printing */}
+      <style>{`
+        @media print {
+          @page {
+            size: ${printLayout === 'roll' ? '70mm 25mm' : 'A4 portrait'};
+            margin: ${printLayout === 'roll' ? '0' : '4mm'};
+          }
+          body {
+            background: white !important;
+            color: black !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          .page-break {
+            page-break-after: always;
+            break-after: page;
+          }
+        }
+      `}</style>
 
-          {/* Quick Specifications Card */}
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-3.5 border border-white/15 text-xs space-y-1.5 min-w-[240px] flex-shrink-0">
-            <div className="font-semibold text-emerald-300 flex items-center gap-1.5 pb-1 border-b border-white/10">
-              <Info className="w-3.5 h-3.5" />
-              มาตรฐานขนาดฉลาก (Label Specs)
+      {/* Screen Interactive UI (Hidden during direct print) */}
+      <div className="no-print space-y-6">
+        {/* 1. Header & Technical Specification Banner */}
+        <div className="bg-gradient-to-r from-emerald-800 via-teal-900 to-slate-900 text-white rounded-2xl p-5 sm:p-7 shadow-lg relative overflow-hidden">
+          <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div className="space-y-2 max-w-2xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold backdrop-blur-xs border border-emerald-400/30">
+                <Tag className="w-3.5 h-3.5" />
+                <span>พิมพ์สติกเกอร์หลอดเก็บสิ่งส่งตรวจ (Specimen Tube Labels)</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+                <Printer className="w-6 h-6 text-emerald-400" />
+                ระบบพิมพ์สติกเกอร์ ขนาด 7.0 cm × 2.5 cm
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                สติกเกอร์มาตรฐานพร้อม <strong>QR Code จากเลข HN</strong>, <strong>ชื่อ-สกุล</strong>, <strong>เลข HN ชัดเจน</strong> และ <strong>ที่อยู่บ้านเลขที่ หมู่ที่</strong> สำหรับติดบนหลอดเก็บอุจจาระ FIT Test และซองส่งตรวจ รองรับทั้งเครื่องพิมพ์ฉลากความร้อนแบบม้วน (Thermal) และเครื่องพิมพ์ทั่วไป (กระดาษ A4)
+              </p>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-[11px] text-emerald-300">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                <span>ปรับปรุงใหม่: ตัวอักษรคมชัด ไม่ซ้อนทับกัน เว้นระยะสระ-วรรณยุกต์ภาษาไทยอย่างสมบูรณ์ และมีระบบ Auto-Scaling ปรับขนาดย่ออัตโนมัติ</span>
+              </div>
             </div>
-            <div className="flex justify-between text-slate-200">
-              <span className="text-slate-300">ขนาด:</span>
-              <span className="font-mono font-bold text-white">ยาว 7 cm × กว้าง 2.5 cm</span>
-            </div>
-            <div className="flex justify-between text-slate-200">
-              <span className="text-slate-300">ขนาดมิลลิเมตร:</span>
-              <span className="font-mono text-emerald-200">70 mm × 25 mm</span>
-            </div>
-            <div className="flex justify-between text-slate-200">
-              <span className="text-slate-300">บาร์โค้ด:</span>
-              <span className="font-semibold text-cyan-200">2D QR Code (HN)</span>
-            </div>
-            <div className="flex justify-between text-slate-200">
-              <span className="text-slate-300">ความละเอียด:</span>
-              <span className="font-mono text-slate-200">300 DPI High-Res</span>
+
+            {/* Quick Specifications Card */}
+            <div className="bg-white/10 backdrop-blur-md rounded-xl p-3.5 border border-white/15 text-xs space-y-1.5 min-w-[240px] flex-shrink-0">
+              <div className="font-semibold text-emerald-300 flex items-center gap-1.5 pb-1 border-b border-white/10">
+                <Info className="w-3.5 h-3.5" />
+                มาตรฐานขนาดฉลาก (Label Specs)
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span className="text-slate-300">ขนาด:</span>
+                <span className="font-mono font-bold text-white">ยาว 7 cm × กว้าง 2.5 cm</span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span className="text-slate-300">ขนาดมิลลิเมตร:</span>
+                <span className="font-mono text-emerald-200">70 mm × 25 mm</span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span className="text-slate-300">บาร์โค้ด:</span>
+                <span className="font-semibold text-cyan-200">2D QR Code (HN)</span>
+              </div>
+              <div className="flex justify-between text-slate-200">
+                <span className="text-slate-300">ความละเอียด:</span>
+                <span className="font-mono text-slate-200">300 DPI High-Res</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* 2. Top Action & Export Bar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-4">
@@ -770,52 +823,38 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
               </button>
             </div>
 
-            {/* Simulated Ruler & Real Scale preview */}
-            <div className="space-y-2">
+            {/* High-Resolution Live Canvas Real Scale Preview (70mm x 25mm) */}
+            <div className="space-y-3">
               <div className="text-xs font-semibold text-slate-600 flex justify-between">
-                <span>ขนาดความกว้างจริงบนหลอด: 70 มิลลิเมตร (7.0 ซม.)</span>
-                <span>ความสูง: 25 มิลลิเมตร (2.5 ซม.)</span>
+                <span>ขนาดสติกเกอร์มาตรฐาน: 70 มม. × 25 มม. (7.0 × 2.5 ซม.)</span>
+                <span className="text-emerald-700 font-bold">ความละเอียด 300 DPI คมชัดทุกพิกเซล</span>
               </div>
 
-              {/* Exact physical size container (70mm x 25mm on 96dpi or scaled up for clarity) */}
-              <div className="p-4 bg-slate-100 rounded-2xl flex flex-col items-center justify-center border border-slate-200">
-                <div 
-                  className="bg-white border-2 border-slate-800 rounded shadow-md flex items-center gap-3 p-2 relative"
-                  style={{
-                    width: '350px', // Enlarged preview for screen readability
-                    height: '125px'
-                  }}
-                >
-                  <div className="w-[100px] h-[100px] bg-slate-50 border border-slate-300 rounded flex-shrink-0 flex items-center justify-center p-1">
-                    {qrCache[inspectedPatient.id] && (
+              {/* Exact physical size container with high-res Canvas rendering */}
+              <div className="p-4 sm:p-6 bg-slate-100 rounded-2xl flex flex-col items-center justify-center border border-slate-200">
+                {inspectedCanvasUrl ? (
+                  <div className="flex flex-col items-center">
+                    <div className="bg-white p-2 rounded-xl shadow-lg border border-slate-300">
                       <img 
-                        src={qrCache[inspectedPatient.id]} 
-                        alt="QR Code" 
-                        className="w-full h-full object-contain"
+                        src={inspectedCanvasUrl} 
+                        alt={`Sticker ${inspectedPatient.hn}`} 
+                        className="w-[380px] max-w-full h-auto rounded border border-slate-200 block"
                       />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="text-[11px] font-bold text-emerald-800 leading-tight">
-                      รพ.โพนนาแก้ว • FIT Test มะเร็งลำไส้ใหญ่
                     </div>
-                    <div className="text-base font-black text-slate-950 font-mono tracking-tight leading-tight">
-                      HN: {inspectedPatient.hn}
-                    </div>
-                    <div className="text-sm font-bold text-slate-900 truncate leading-tight">
-                      {inspectedPatient.prefix}{inspectedPatient.firstName} {inspectedPatient.lastName}
-                    </div>
-                    <div className="text-xs font-medium text-slate-700 truncate leading-tight">
-                      บ้านเลขที่ {inspectedPatient.houseNo} หมู่ที่ {inspectedPatient.villageNo} {inspectedPatient.villageName || ''}
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono truncate">
-                      อายุ {inspectedPatient.ageYears} ปี ({inspectedPatient.gender}) • เลขบัตร: {inspectedPatient.idCard}
+                    <div className="mt-2.5 text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>แสดงผลจริงจากตัวประมวลผล PDF/Roll Printer: ตัวหนังสือคมชัด ไม่ทับซ้อน จัดวางอย่างสมบูรณ์</span>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="w-[350px] h-[125px] flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200 shadow-sm gap-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                    <span className="text-xs text-slate-500">กำลังประมวลผลตัวอย่างสติกเกอร์ความละเอียดสูง...</span>
+                  </div>
+                )}
 
-                <div className="text-[11px] text-slate-500 mt-2 text-center">
-                  💡 ข้อมูลใน QR Code คือ: <code className="bg-white px-2 py-0.5 rounded border border-slate-300 font-bold font-mono text-emerald-700">{inspectedPatient.hn}</code> สามารถใช้กล้องหรือเครื่องสแกนบาร์โค้ดยิงเพื่อค้นหาประวัติได้ทันที
+                <div className="text-[11px] text-slate-500 mt-3 text-center">
+                  💡 ข้อมูลใน QR Code คือเลขประจำตัวผู้ป่วย (HN): <code className="bg-white px-2 py-0.5 rounded border border-slate-300 font-bold font-mono text-emerald-700">{inspectedPatient.hn}</code> สามารถใช้กล้องมือถือหรือเครื่องสแกนบาร์โค้ดยิงเพื่อค้นหาประวัติได้ทันที
                 </div>
               </div>
             </div>
@@ -868,6 +907,7 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {/* 6. Hidden Printable Sticker Section for Direct Browser Print (@media print) */}
       <div className="hidden print-only">
@@ -876,6 +916,7 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
           <div className="sticker-roll-print-container">
             {expandedPatientsToPrint.map((item, idx) => {
               const patient = item.patient;
+              const formattedCid = (patient.idCard || '').replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5');
               return (
                 <div 
                   key={`print-roll-${patient.id}-copy-${item.copyIndex}-${idx}`}
@@ -883,42 +924,74 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
                   style={{
                     width: '70mm',
                     height: '25mm',
-                    padding: '1.5mm',
+                    maxHeight: '25mm',
+                    padding: '1.6mm 2mm',
                     boxSizing: 'border-box',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '2mm',
+                    gap: '2.5mm',
                     fontFamily: '"Prompt", "Sarabun", sans-serif',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    backgroundColor: '#ffffff',
+                    pageBreakAfter: 'always',
+                    breakAfter: 'page'
                   }}
                 >
-                  {/* QR Code */}
+                  {/* Left: QR Code with label */}
                   {qrCache[patient.id] && (
-                    <img 
-                      src={qrCache[patient.id]} 
-                      alt={patient.hn} 
-                      style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
-                    />
+                    <div style={{ width: '21.5mm', height: '21.5mm', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <img 
+                        src={qrCache[patient.id]} 
+                        alt={patient.hn} 
+                        style={{ width: '19mm', height: '19mm', objectFit: 'contain' }} 
+                      />
+                      <span style={{ fontSize: '5pt', color: '#64748B', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                        QR: {patient.hn}
+                      </span>
+                    </div>
                   )}
-                  {/* Text Details */}
-                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
-                    <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857', display: 'flex', justifyContent: 'space-between' }}>
+
+                  {/* Vertical hairline divider */}
+                  <div style={{ width: '1px', height: '21.5mm', backgroundColor: '#E2E8F0', flexShrink: 0 }} />
+
+                  {/* Right: Text Details organized with flexbox space-between */}
+                  <div style={{ flex: 1, minWidth: 0, height: '21.5mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    {/* Row 1: Hospital Header */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '6.5pt', fontWeight: 'bold', color: '#047857', lineHeight: 1.1 }}>
                       <span>รพ.โพนนาแก้ว • FIT Test</span>
-                      {item.totalCopies > 1 && (
-                        <span style={{ fontSize: '6pt', color: '#059669' }}>[{item.copyIndex}/{item.totalCopies}]</span>
-                      )}
+                      <span style={{ fontSize: '5.5pt', color: '#64748B', fontWeight: 'normal' }}>
+                        {item.totalCopies > 1 ? `[${item.copyIndex}/${item.totalCopies}] 70×25mm` : '70×25mm'}
+                      </span>
                     </div>
-                    <div style={{ fontSize: '12pt', fontWeight: 'bold', color: '#000000', letterSpacing: '-0.3px' }}>
-                      HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
+
+                    {/* Row 2: HN (Left) + Age/Sex (Right) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', lineHeight: 1.1 }}>
+                      <span style={{ fontSize: '11pt', fontWeight: '900', color: '#000000', fontFamily: 'monospace', letterSpacing: '-0.3px' }}>
+                        HN: {patient.hn}
+                      </span>
+                      <span style={{ fontSize: '6.5pt', fontWeight: 'bold', color: '#0F172A', backgroundColor: '#F1F5F9', padding: '0.3mm 1.5mm', borderRadius: '1mm', border: '0.3px solid #CBD5E1' }}>
+                        อายุ {patient.ageYears} ปี ({patient.gender === 'ชาย' ? 'ช' : 'ญ'})
+                      </span>
                     </div>
-                    <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+
+                    {/* Row 3: Full Name (Sharp & Bold) */}
+                    <div style={{ fontSize: '8.5pt', fontWeight: 'bold', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
                       {patient.prefix}{patient.firstName} {patient.lastName}
                     </div>
-                    <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''} {patient.subdistrict ? `ต.${patient.subdistrict}` : ''}
+
+                    {/* Row 4: Address */}
+                    <div style={{ fontSize: '6.5pt', fontWeight: '500', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
+                      บ้านเลขที่ {patient.houseNo || '-'} ม.{patient.villageNo || '-'} {patient.villageName ? `(${patient.villageName})` : ''} {patient.subdistrict ? `ต.${patient.subdistrict}` : ''}
                     </div>
-                    <div style={{ fontSize: '6pt', color: '#6B7280' }}>
-                      CID: {patient.idCard}
+
+                    {/* Row 5: CID + Benefit Code */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '5.5pt', color: '#475569', lineHeight: 1.1 }}>
+                      <span style={{ fontFamily: 'monospace' }}>
+                        เลขบัตร: {formattedCid || '-'}
+                      </span>
+                      <span style={{ fontWeight: 'bold', color: '#047857' }}>
+                        {patient.benefitName || 'บัตรทอง'} (1B0060/61)
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -926,55 +999,73 @@ export const StickerPrintView: React.FC<StickerPrintViewProps> = ({
             })}
           </div>
         ) : (
-          // A4 Grid Layout: 2 columns x 10 rows per sheet
-          <div className="sticker-a4-sheet-container">
-            {expandedPatientsToPrint.map((item, idx) => {
-              const patient = item.patient;
-              return (
-                <div 
-                  key={`print-a4-${patient.id}-copy-${item.copyIndex}-${idx}`}
-                  className="sticker-label-a4"
-                  style={{
-                    width: '70mm',
-                    height: '25mm',
-                    margin: '1.5mm',
-                    border: '0.5px dashed #ccc',
-                    padding: '1.5mm',
-                    boxSizing: 'border-box',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2mm',
-                    fontFamily: '"Prompt", "Sarabun", sans-serif',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {qrCache[patient.id] && (
-                    <img 
-                      src={qrCache[patient.id]} 
-                      alt={patient.hn} 
-                      style={{ width: '21mm', height: '21mm', objectFit: 'contain', flexShrink: 0 }} 
-                    />
-                  )}
-                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', lineHeight: '1.2' }}>
-                    <div style={{ fontSize: '7pt', fontWeight: 'bold', color: '#047857', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>รพ.โพนนาแก้ว • FIT Test</span>
-                      {item.totalCopies > 1 && (
-                        <span style={{ fontSize: '6pt', color: '#059669' }}>[{item.copyIndex}/{item.totalCopies}]</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: '11pt', fontWeight: 'bold', color: '#000000' }}>
-                      HN: {patient.hn} <span style={{ fontSize: '8pt', fontWeight: 'normal' }}>[{patient.ageYears}ปี]</span>
-                    </div>
-                    <div style={{ fontSize: '9pt', fontWeight: 'bold', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {patient.prefix}{patient.firstName} {patient.lastName}
-                    </div>
-                    <div style={{ fontSize: '7pt', color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      บ้านเลขที่ {patient.houseNo} ม.{patient.villageNo} {patient.villageName ? `(${patient.villageName})` : ''}
+          // A4 Grid Layout: 2 columns x 10 rows per sheet (20 labels/page)
+          <div className="sticker-a4-sheet-container" style={{ padding: '5mm', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3.5mm 10mm', justifyContent: 'center' }}>
+              {expandedPatientsToPrint.map((item, idx) => {
+                const patient = item.patient;
+                const formattedCid = (patient.idCard || '').replace(/(\d{1})(\d{4})(\d{5})(\d{2})(\d{1})/, '$1-$2-$3-$4-$5');
+                const isNewPage = idx > 0 && idx % 20 === 0;
+                return (
+                  <div 
+                    key={`print-a4-${patient.id}-copy-${item.copyIndex}-${idx}`}
+                    className={`sticker-label-a4 ${isNewPage ? 'page-break' : ''}`}
+                    style={{
+                      width: '70mm',
+                      height: '25mm',
+                      maxHeight: '25mm',
+                      border: '0.4px dashed #94A3B8',
+                      padding: '1.6mm 2mm',
+                      boxSizing: 'border-box',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '2.5mm',
+                      fontFamily: '"Prompt", "Sarabun", sans-serif',
+                      overflow: 'hidden',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    {qrCache[patient.id] && (
+                      <div style={{ width: '21.5mm', height: '21.5mm', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <img 
+                          src={qrCache[patient.id]} 
+                          alt={patient.hn} 
+                          style={{ width: '19mm', height: '19mm', objectFit: 'contain' }} 
+                        />
+                        <span style={{ fontSize: '5pt', color: '#64748B', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                          QR: {patient.hn}
+                        </span>
+                      </div>
+                    )}
+                    <div style={{ width: '1px', height: '21.5mm', backgroundColor: '#E2E8F0', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, height: '21.5mm', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '6.5pt', fontWeight: 'bold', color: '#047857', lineHeight: 1.1 }}>
+                        <span>รพ.โพนนาแก้ว • FIT Test</span>
+                        <span style={{ fontSize: '5.5pt', color: '#64748B' }}>70×25mm</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', lineHeight: 1.1 }}>
+                        <span style={{ fontSize: '10.5pt', fontWeight: '900', color: '#000000', fontFamily: 'monospace' }}>
+                          HN: {patient.hn}
+                        </span>
+                        <span style={{ fontSize: '6.5pt', fontWeight: 'bold', color: '#0F172A' }}>
+                          อายุ {patient.ageYears} ปี ({patient.gender === 'ชาย' ? 'ช' : 'ญ'})
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '8.5pt', fontWeight: 'bold', color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
+                        {patient.prefix}{patient.firstName} {patient.lastName}
+                      </div>
+                      <div style={{ fontSize: '6.5pt', color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.15 }}>
+                        บ้านเลขที่ {patient.houseNo || '-'} ม.{patient.villageNo || '-'} {patient.villageName ? `(${patient.villageName})` : ''}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '5.5pt', color: '#64748B', lineHeight: 1.1 }}>
+                        <span>ID: {formattedCid || '-'}</span>
+                        <span style={{ color: '#047857', fontWeight: 'bold' }}>{patient.benefitName || 'บัตรทอง'}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

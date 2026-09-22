@@ -16,7 +16,8 @@ import {
   Save, 
   X,
   Send,
-  Trash2
+  Trash2,
+  Stethoscope
 } from 'lucide-react';
 import { UserAccount } from '../types';
 
@@ -29,6 +30,7 @@ interface ReferralViewProps {
   onEditPatient?: (patient: PatientScreening) => void;
   onDeletePatient?: (patient: PatientScreening) => void;
   currentUser?: UserAccount | null;
+  onNavigateToTracking?: () => void;
 }
 
 export const ReferralView: React.FC<ReferralViewProps> = ({
@@ -39,7 +41,8 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
   onPrintAll,
   onEditPatient,
   onDeletePatient,
-  currentUser
+  currentUser,
+  onNavigateToTracking
 }) => {
   // Filter for patients with Positive FIT Test result (Code 1B0061)
   const positivePatients = patients.filter(p => p.fitResult === 'positive');
@@ -127,6 +130,16 @@ export const ReferralView: React.FC<ReferralViewProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2.5 flex-wrap">
+            {onNavigateToTracking && (
+              <button
+                type="button"
+                onClick={onNavigateToTracking}
+                className="px-4 py-2.5 bg-white border border-teal-300 hover:bg-teal-50 text-teal-800 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-xs flex items-center gap-2"
+              >
+                <Stethoscope className="w-4 h-4 text-teal-600" />
+                <span>ติดตาม CA Colon Active Tracking</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onPrintAll}

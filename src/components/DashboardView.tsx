@@ -276,19 +276,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Card 4: Positive 1B0061 */}
-        <div className="bg-white rounded-2xl p-5 border border-rose-200/90 bg-gradient-to-b from-rose-50/30 to-white shadow-xs">
+        <div 
+          onClick={() => onNavigateToTab('ca-colon-tracking')}
+          className="bg-white rounded-2xl p-5 border border-rose-200/90 bg-gradient-to-b from-rose-50/30 to-white shadow-xs cursor-pointer hover:border-rose-400 hover:shadow-md transition-all group"
+        >
           <div className="flex items-center justify-between">
             <div>
-              <span className="text-xs font-bold text-rose-800">ผลบวก (Positive)</span>
+              <span className="text-xs font-bold text-rose-800 group-hover:underline">ผลบวก (Positive)</span>
               <span className="ml-1.5 px-1.5 py-0.2 text-[10px] bg-rose-100 text-rose-800 rounded font-mono font-bold">1B0061</span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center group-hover:bg-rose-200 transition-colors">
               <AlertOctagon className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-rose-600">{stats.positiveCount}</span>
-            <span className="text-xs text-slate-500 font-medium">คน</span>
+          <div className="mt-2 flex items-baseline justify-between">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-rose-600">{stats.positiveCount}</span>
+              <span className="text-xs text-slate-500 font-medium">คน</span>
+            </div>
+            <span className="text-[11px] font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200 flex items-center gap-1">
+              ติดตาม CA Colon ➔
+            </span>
           </div>
           <div className="mt-3 pt-3 border-t border-rose-100 flex items-center justify-between text-xs">
             <span className="text-slate-600">ร้อยละผลบวก:</span>

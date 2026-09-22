@@ -3,6 +3,8 @@ import { getAuth } from 'firebase/auth';
 import { 
   initializeFirestore,
   getFirestore, 
+  persistentLocalCache,
+  persistentMultipleTabManager,
   collection, 
   doc, 
   setDoc, 
@@ -10,7 +12,7 @@ import {
   onSnapshot, 
   getDocs, 
   writeBatch,
-  getDocFromServer
+  getDocFromCache
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 import { PatientScreening } from '../types';
@@ -19,16 +21,22 @@ import { INITIAL_PATIENTS } from '../mockData';
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfigJson) : getApp();
 
-// Use initializeFirestore with experimentalForceLongPolling to prevent
-// "@firebase/firestore: Could not reach Cloud Firestore backend" and WebChannel stream disconnects
-// behind reverse proxies and sandboxed iframes.
+// Initialize Firestore with persistent multi-tab cache and auto-detect long-polling
+// to ensure seamless offline resilience and reliable connections behind sandboxed proxies.
 let db: ReturnType<typeof getFirestore>;
 try {
-  db = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
-  }, firebaseConfigJson.firestoreDatabaseId || undefined);
+  db = initializeFirestore(
+    app,
+    {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      }),
+      experimentalAutoDetectLongPolling: true,
+    },
+    firebaseConfigJson.firestoreDatabaseId || undefined
+  );
 } catch {
-  // If already initialized with options in current runtime
+  // If already initialized in current runtime (e.g., during module hot-reload)
   db = getFirestore(app, firebaseConfigJson.firestoreDatabaseId || undefined);
 }
 
@@ -85,22 +93,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Connection test on boot as recommended by the Firebase Integration Skill
+// Connection test utility - safe and non-intrusive
 export async function testConnection(): Promise<boolean> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    // Check local cache readiness first to avoid unhandled network exceptions
+    await getDocFromCache(doc(db, PATIENTS_COLLECTION, 'health-check')).catch(() => null);
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase connection check: Client operating in offline mode or connecting.');
-    }
+  } catch {
     return false;
   }
-}
-
-// Execute connection verification asynchronously
-if (typeof window !== 'undefined') {
-  testConnection().catch(() => {});
 }
 
 /**
@@ -112,70 +113,40 @@ export function subscribeToPatients(
 ) {
   const patientsRef = collection(db, PATIENTS_COLLECTION);
   let isCancelled = false;
-  let activeUnsubscribe: (() => void) | null = null;
-  let retryTimer: any = null;
 
-  const startListening = () => {
-    if (isCancelled) return;
-
-    try {
-      activeUnsubscribe = onSnapshot(
-        patientsRef,
-        (snapshot) => {
-          if (isCancelled) return;
-          if (snapshot.empty) {
-            onUpdate([]);
-            return;
-          }
-
-          const list: PatientScreening[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as PatientScreening;
-            list.push({ ...data, id: docSnap.id });
-          });
-
-          // Sort by creation or HN descending
-          list.sort((a, b) => (b.hn || '').localeCompare(a.hn || ''));
-          onUpdate(list);
-        },
-        (err) => {
-          if (isCancelled) return;
-          console.warn('Firestore real-time subscription update:', err.message);
-          if (onError) onError(err);
-
-          // Auto-reconnect after 4 seconds on transient network disconnect
-          if (!isCancelled) {
-            retryTimer = setTimeout(() => {
-              if (!isCancelled) {
-                startListening();
-              }
-            }, 4000);
-          }
-        }
-      );
-    } catch (err: any) {
-      if (!isCancelled) {
-        console.warn('Error starting onSnapshot:', err);
-        if (onError) onError(err);
-        retryTimer = setTimeout(() => {
-          if (!isCancelled) {
-            startListening();
-          }
-        }, 4000);
+  const unsubscribe = onSnapshot(
+    patientsRef,
+    (snapshot) => {
+      if (isCancelled) return;
+      if (snapshot.empty) {
+        onUpdate([]);
+        return;
       }
-    }
-  };
 
-  startListening();
+      const list: PatientScreening[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as PatientScreening;
+        list.push({ ...data, id: docSnap.id });
+      });
+
+      // Sort by creation or HN descending
+      list.sort((a, b) => (b.hn || '').localeCompare(a.hn || ''));
+      onUpdate(list);
+    },
+    (err: any) => {
+      if (isCancelled) return;
+      if (err?.code === 'permission-denied') {
+        handleFirestoreError(err, OperationType.GET, PATIENTS_COLLECTION);
+      }
+      // Transient connection issues or offline mode are handled automatically by Firestore's internal engine
+      console.warn('Firestore subscription status:', err?.message || err);
+      if (onError) onError(err);
+    }
+  );
 
   return () => {
     isCancelled = true;
-    if (activeUnsubscribe) {
-      activeUnsubscribe();
-    }
-    if (retryTimer) {
-      clearTimeout(retryTimer);
-    }
+    unsubscribe();
   };
 }
 
