@@ -209,6 +209,38 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
     }
   };
 
+  // Helper function to render bowel prep badge
+  const renderPrepBadge = (prepStatus?: string) => {
+    switch (prepStatus) {
+      case 'received_meds':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+            💊 รับยาระบายแล้ว
+          </span>
+        );
+      case 'diet_restricted':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+            🥗 เริ่มงดกากใยแล้ว
+          </span>
+        );
+      case 'prep_completed':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            ✅ ทานยาครบ/ใสแล้ว
+          </span>
+        );
+      case 'problem_encountered':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800 border border-rose-200">
+            ⚠️ มีปัญหาการทานยา
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Page Title & Mission Banner */}
@@ -422,15 +454,15 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+            <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
               <tr>
-                <th className="py-3.5 px-4">HN / ลำดับ</th>
-                <th className="py-3.5 px-4">ชื่อ-นามสกุล / เพศ / อายุ</th>
-                <th className="py-3.5 px-4">เบอร์โทรศัพท์</th>
-                <th className="py-3.5 px-4">วันที่ผล FIT ออก</th>
-                <th className="py-3.5 px-4">สถานะปัจจุบัน</th>
-                <th className="py-3.5 px-4">วันนัดส่องกล้อง</th>
-                <th className="py-3.5 px-4 text-center">การดำเนินการ (Actions)</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">HN / ที่อยู่</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">ชื่อ-นามสกุล / เพศ / อายุ</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">เบอร์โทรศัพท์</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">วันที่ผล FIT ออก</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">สถานะปัจจุบัน & Clinical Notes</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">วันนัดส่องกล้อง & เตรียมตัว</th>
+                <th className="py-3.5 px-4 text-center whitespace-nowrap">การดำเนินการ (Actions)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -517,28 +549,43 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
 
                       {/* Status Badge */}
                       <td className="py-3 px-4">
-                        {renderStatusBadge(tracking?.status)}
+                        <div>
+                          {renderStatusBadge(tracking?.status)}
+                        </div>
                         {tracking?.clinicalNotes && (
-                          <div className="text-[11px] text-slate-500 mt-1 line-clamp-1 max-w-[200px]" title={tracking.clinicalNotes}>
-                            📝 {tracking.clinicalNotes}
+                          <div className="text-[11px] text-slate-600 mt-1.5 line-clamp-2 max-w-[280px] xl:max-w-[360px] 2xl:max-w-[460px] bg-slate-50 p-1.5 rounded-lg border border-slate-200/60" title={tracking.clinicalNotes}>
+                            <span className="font-semibold text-slate-700">📝 โน้ต:</span> {tracking.clinicalNotes}
                           </div>
                         )}
                       </td>
 
-                      {/* Appointment */}
+                      {/* Appointment & Bowel Prep Status */}
                       <td className="py-3 px-4 text-xs">
                         {appointmentDateStr ? (
-                          <div>
+                          <div className="space-y-1">
                             <div className="font-bold text-purple-950 flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-purple-600" />
-                              {appointmentDateStr} {tracking?.appointmentTime || patient.referral?.appointmentTime || ''}
+                              <Calendar className="w-3.5 h-3.5 text-purple-600 flex-shrink-0" />
+                              <span>{appointmentDateStr} {tracking?.appointmentTime || patient.referral?.appointmentTime || ''}</span>
                             </div>
                             <div className="text-[11px] text-slate-500">
                               {tracking?.hospitalName || patient.referral?.destinationHospital || 'รพ.สกลนคร'}
                             </div>
+                            {/* Preparation status tag */}
+                            {tracking?.bowelPrepStatus && (
+                              <div className="mt-1">
+                                {renderPrepBadge(tracking.bowelPrepStatus)}
+                              </div>
+                            )}
                           </div>
                         ) : (
-                          <span className="text-slate-400 italic text-xs">ยังไม่นัดหมาย</span>
+                          <div className="space-y-1">
+                            <span className="text-slate-400 italic text-xs block">ยังไม่นัดหมาย</span>
+                            {tracking?.bowelPrepStatus && (
+                              <div className="mt-0.5">
+                                {renderPrepBadge(tracking.bowelPrepStatus)}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
 

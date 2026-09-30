@@ -76,6 +76,27 @@ export default function App() {
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
   const [cloudSyncToast, setCloudSyncToast] = useState<string | null>(null);
 
+  // 16:9 Widescreen full-width layout state (defaults to true for immersive widescreen fit)
+  const [isWidescreen16x9, setIsWidescreen16x9] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('pnk_widescreen_16x9');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch {}
+    return true;
+  });
+
+  const handleToggleWidescreen = () => {
+    setIsWidescreen16x9(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('pnk_widescreen_16x9', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // Admin Edit & Delete Modal States
   const [patientToEdit, setPatientToEdit] = useState<PatientScreening | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<PatientScreening | null>(null);
@@ -370,6 +391,8 @@ export default function App() {
         isCloudConnected={isCloudConnected}
         currentUser={currentUser}
         onLogout={handleLogout}
+        isWidescreen16x9={isWidescreen16x9}
+        onToggleWidescreen={handleToggleWidescreen}
       />
 
       {/* Primary Navigation Tabs (Desktop top bar + Mobile bottom bar) */}
@@ -382,6 +405,7 @@ export default function App() {
         pendingKitCount={pendingKitCount}
         positiveCount={positiveCount}
         overdueCount={overdueCount}
+        isWidescreen16x9={isWidescreen16x9}
       />
 
       {/* Cloud Sync Toast Notification */}
@@ -392,8 +416,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Area - pb-24 on mobile ensures bottom navigation doesn't overlap content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-24 sm:pb-12">
+      {/* Main Content Area - Expands to 16:9 widescreen naturally with responsive padding */}
+      <main className={`flex-1 w-full mx-auto px-3 sm:px-5 lg:px-8 2xl:px-10 pt-3 sm:pt-5 pb-24 sm:pb-12 transition-all duration-300 ${
+        isWidescreen16x9 ? 'max-w-[1920px] 2xl:max-w-full' : 'max-w-7xl'
+      }`}>
         {activeTab === 'dashboard' && (
           <DashboardView
             patients={patients}
@@ -513,7 +539,9 @@ export default function App() {
 
       {/* Desktop Footer (Hidden on mobile phones to save screen estate) */}
       <footer className="hidden sm:block bg-white border-t border-slate-200 py-3.5 text-center text-xs text-slate-500 no-print">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className={`w-full mx-auto px-4 sm:px-6 2xl:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 transition-all duration-300 ${
+          isWidescreen16x9 ? 'max-w-[1920px] 2xl:max-w-full' : 'max-w-7xl'
+        }`}>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             <span>
@@ -523,6 +551,9 @@ export default function App() {
           <div className="flex items-center gap-3 text-slate-400">
             <span className="flex items-center gap-1 text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded font-mono text-[11px]">
               <Cloud className="w-3 h-3" /> Cloud Firestore: ซิงค์สดทุกเครื่อง
+            </span>
+            <span className="font-mono text-[11px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+              จอ 16:9 {isWidescreen16x9 ? 'เต็มหน้าจอ' : 'ขนาดมาตรฐาน'}
             </span>
             <span>1B0060 (ผลลบ) / 1B0061 (ผลบวก)</span>
           </div>

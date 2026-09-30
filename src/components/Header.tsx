@@ -1,5 +1,18 @@
-import React from 'react';
-import { Activity, Hospital, Calendar, RotateCcw, Cloud, CloudOff, User, LogOut, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Activity, 
+  Hospital, 
+  Calendar, 
+  RotateCcw, 
+  Cloud, 
+  CloudOff, 
+  User, 
+  LogOut, 
+  Trash2,
+  Maximize,
+  Minimize,
+  Monitor
+} from 'lucide-react';
 import { UserAccount } from '../types';
 
 interface HeaderProps {
@@ -10,6 +23,8 @@ interface HeaderProps {
   isCloudConnected: boolean;
   currentUser?: UserAccount | null;
   onLogout?: () => void;
+  isWidescreen16x9?: boolean;
+  onToggleWidescreen?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -19,8 +34,39 @@ export const Header: React.FC<HeaderProps> = ({
   totalTested,
   isCloudConnected,
   currentUser,
-  onLogout
+  onLogout,
+  isWidescreen16x9 = true,
+  onToggleWidescreen
 }) => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const handleToggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    } catch (e) {
+      console.warn('Fullscreen API error:', e);
+    }
+  };
+
   const today = new Date();
   const thaiMonths = [
     'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
@@ -30,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-gradient-to-r from-emerald-800 via-teal-800 to-cyan-900 text-white shadow-md border-b border-emerald-900/40 no-print">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className={`w-full mx-auto px-3 sm:px-6 2xl:px-8 transition-all duration-300 ${isWidescreen16x9 ? 'max-w-[1920px] 2xl:max-w-full' : 'max-w-7xl'}`}>
         <div className="py-2.5 sm:py-3 flex items-center justify-between gap-2">
           
           {/* Logo & Hospital Title */}
@@ -99,6 +145,45 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
             )}
+
+            {/* 16:9 Fullscreen & Viewport Fit Controls */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                title={isFullscreen ? "ออกจากโหมดเต็มจอ (Esc)" : "ปรับการแสดงผลเต็มจอ 16:9 (Fullscreen Presentation)"}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-semibold rounded-lg sm:rounded-xl transition-all shadow-xs border ${
+                  isFullscreen
+                    ? 'bg-amber-400 text-slate-900 border-amber-300 ring-2 ring-amber-300/40'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                }`}
+              >
+                {isFullscreen ? (
+                  <Minimize className="w-3.5 h-3.5 text-slate-900" />
+                ) : (
+                  <Maximize className="w-3.5 h-3.5 text-cyan-300" />
+                )}
+                <span className="hidden sm:inline">
+                  {isFullscreen ? 'ย่อจอ' : 'เต็มจอ 16:9'}
+                </span>
+              </button>
+
+              {onToggleWidescreen && (
+                <button
+                  type="button"
+                  onClick={onToggleWidescreen}
+                  title={isWidescreen16x9 ? "คลิกเพื่อสลับเป็นความกว้างปกติ (Standard 1280px)" : "คลิกเพื่อปรับขนาดกว้างเต็มจอ 16:9 (Widescreen 1920px+)"}
+                  className={`hidden md:flex items-center gap-1 px-2 py-1 text-[11px] rounded-lg sm:rounded-xl transition-all border ${
+                    isWidescreen16x9
+                      ? 'bg-cyan-500/25 border-cyan-400/40 text-cyan-200'
+                      : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/15'
+                  }`}
+                >
+                  <Monitor className="w-3 h-3 text-cyan-300" />
+                  <span className="font-mono text-[10px]">16:9</span>
+                </button>
+              )}
+            </div>
 
             {/* Admin Database Tools */}
             {currentUser?.role === 'admin' && (

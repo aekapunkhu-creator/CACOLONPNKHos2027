@@ -26,6 +26,7 @@ interface NavigationProps {
   pendingKitCount: number;
   positiveCount: number;
   overdueCount?: number;
+  isWidescreen16x9?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -33,7 +34,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   onSelectTab,
   pendingKitCount,
   positiveCount,
-  overdueCount = 0
+  overdueCount = 0,
+  isWidescreen16x9 = true
 }) => {
   const tabs = [
     {
@@ -109,8 +111,8 @@ export const Navigation: React.FC<NavigationProps> = ({
     <>
       {/* Top Desktop & Tablet Navigation */}
       <nav className="bg-white border-b border-slate-200 shadow-xs sticky top-0 z-40 no-print">
-        <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
-          <div className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none">
+        <div className={`w-full mx-auto px-2 sm:px-6 2xl:px-8 transition-all duration-300 ${isWidescreen16x9 ? 'max-w-[1920px] 2xl:max-w-full' : 'max-w-7xl'}`}>
+          <div className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2 scrollbar-none xl:justify-start">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
