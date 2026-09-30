@@ -17,9 +17,15 @@ import {
   Edit3,
   Trash2,
   ShieldAlert,
-  HeartPulse
+  HeartPulse,
+  RotateCcw,
+  Calendar,
+  X,
+  XCircle,
+  PackageX
 } from 'lucide-react';
 import { UserAccount } from '../types';
+import { CancelKitModal } from './CancelKitModal';
 
 interface AllScreeningListViewProps {
   patients: PatientScreening[];
@@ -28,6 +34,7 @@ interface AllScreeningListViewProps {
   onEditPatient?: (patient: PatientScreening) => void;
   onDeletePatient?: (patient: PatientScreening) => void;
   onSelectPatientForVitals?: (patient: PatientScreening) => void;
+  onUpdatePatient?: (updated: PatientScreening) => Promise<void> | void;
   currentUser?: UserAccount | null;
 }
 
@@ -38,6 +45,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   onEditPatient,
   onDeletePatient,
   onSelectPatientForVitals,
+  onUpdatePatient,
   currentUser
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,8 +53,87 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   const [filterKitStatus, setFilterKitStatus] = useState<string>('all');
   const [filterVillage, setFilterVillage] = useState<string>('all');
 
+  // Filter by Tested Date (ว/ด/ป ที่ตรวจ)
+  const [filterDatePreset, setFilterDatePreset] = useState<string>('all');
+  const [filterStartDate, setFilterStartDate] = useState<string>('');
+  const [filterEndDate, setFilterEndDate] = useState<string>('');
+
+  // Cancel Sent Kit Modal & Toast State
+  const [cancelKitPatient, setCancelKitPatient] = useState<PatientScreening | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Helper to extract ISO date YYYY-MM-DD from various date string formats
+  const extractDateIso = (dateStr?: string): string | null => {
+    if (!dateStr) return null;
+    const trimmed = dateStr.trim();
+    // YYYY-MM-DD
+    const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    // DD/MM/YYYY or DD/MM/BBBB
+    const dmy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmy) {
+      let y = parseInt(dmy[3], 10);
+      if (y > 2500) y -= 543;
+      return `${y}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+    return null;
+  };
+
+  const setQuickDatePreset = (preset: 'today' | 'last7days' | 'thisMonth' | 'all') => {
+    setFilterDatePreset(preset);
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+
+    if (preset === 'today') {
+      setFilterStartDate(todayStr);
+      setFilterEndDate(todayStr);
+    } else if (preset === 'last7days') {
+      const past7 = new Date();
+      past7.setDate(now.getDate() - 7);
+      setFilterStartDate(past7.toISOString().slice(0, 10));
+      setFilterEndDate(todayStr);
+    } else if (preset === 'thisMonth') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      setFilterStartDate(firstDay);
+      setFilterEndDate(todayStr);
+    } else if (preset === 'all') {
+      setFilterStartDate('');
+      setFilterEndDate('');
+    }
+  };
+
+  const handleConfirmCancelKit = async (patient: PatientScreening, resetLabResult: boolean) => {
+    const updated: PatientScreening = {
+      ...patient,
+      kitStatus: 'not_received',
+      kitReceivedDate: undefined,
+      heightCm: undefined,
+      weightKg: undefined,
+      waistInch: undefined,
+      waistCm: undefined,
+      bloodPressureSys: undefined,
+      bloodPressureDia: undefined,
+      bmi: undefined,
+      ...(resetLabResult ? {
+        fitResult: 'pending',
+        testedDate: undefined,
+        testedBy: undefined,
+        testLotNo: undefined,
+        notes: undefined,
+        referral: undefined,
+        caTracking: undefined,
+      } : {})
+    };
+
+    if (onUpdatePatient) {
+      await onUpdatePatient(updated);
+    }
+    setToastMessage(`ยกเลิกสถานะส่งชุดตรวจของ HN: ${patient.hn} (${patient.prefix}${patient.firstName} ${patient.lastName}) สำเร็จ (สถานะเปลี่ยนเป็น: ยังไม่ส่งชุดตรวจ)`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   const filteredPatients = patients.filter((p) => {
-    // Text search
+    // 1. Text search
     const q = searchQuery.toLowerCase().trim();
     if (q) {
       const matchHn = p.hn.toLowerCase().includes(q);
@@ -56,7 +143,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
       if (!matchHn && !matchName && !matchIdCard && !matchHouse) return false;
     }
 
-    // Result filter
+    // 2. Result filter
     if (filterResult !== 'all') {
       if (filterResult === 'pending' && p.fitResult !== 'pending') return false;
       if (filterResult === 'positive' && p.fitResult !== 'positive') return false;
@@ -64,18 +151,30 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
       if (filterResult === 'inconclusive' && p.fitResult !== 'inconclusive') return false;
     }
 
-    // Kit Status & Vitals filter
+    // 3. Kit Status & Vitals filter
     if (filterKitStatus !== 'all') {
       const hasVitalsOrReceived = p.kitStatus === 'received' || p.kitStatus === 'tested' || !!p.heightCm || !!p.weightKg || !!p.bloodPressureSys;
       if (filterKitStatus === 'received' && !hasVitalsOrReceived) return false;
       if (filterKitStatus === 'not_received' && hasVitalsOrReceived) return false;
     }
 
-    // Village filter
+    // 4. Village filter
     if (filterVillage !== 'all') {
       const match1 = p.villageNo === filterVillage;
       const match2 = !isNaN(parseInt(p.villageNo, 10)) && parseInt(p.villageNo, 10) === parseInt(filterVillage, 10);
       if (!match1 && !match2) return false;
+    }
+
+    // 5. Tested Date filter (ว/ด/ป ที่ตรวจ)
+    if (filterDatePreset === 'not_tested') {
+      if (p.testedDate) return false;
+    } else if (filterDatePreset === 'tested_any') {
+      if (!p.testedDate) return false;
+    } else if (filterStartDate || filterEndDate) {
+      const pDate = extractDateIso(p.testedDate);
+      if (!pDate) return false;
+      if (filterStartDate && pDate < filterStartDate) return false;
+      if (filterEndDate && pDate > filterEndDate) return false;
     }
 
     return true;
@@ -83,7 +182,11 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
 
   const handleExportExcel = () => {
     const todayStr = new Date().toISOString().split('T')[0];
-    exportScreeningToExcel(filteredPatients, `รายชื่อผู้คัดกรองมะเร็งลำไส้ใหญ่_รพ.โพนนาแก้ว_${todayStr}.xlsx`);
+    let filename = `รายชื่อผู้คัดกรองมะเร็งลำไส้ใหญ่_รพ.โพนนาแก้ว_${todayStr}.xlsx`;
+    if (filterStartDate && filterEndDate) {
+      filename = `รายชื่อผู้คัดกรองมะเร็งลำไส้ใหญ่_${filterStartDate}_ถึง_${filterEndDate}.xlsx`;
+    }
+    exportScreeningToExcel(filteredPatients, filename);
   };
 
   return (
@@ -128,62 +231,218 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
         </div>
 
         {/* Filter Controls */}
-        <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Search Box */}
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหา HN / ชื่อ-สกุล / เลขบัตร ปชช. / บ้านเลขที่..."
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+        <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+          {/* Row 1: General Filters (Search, Result, Kit Status, Village) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Search Box */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ค้นหา HN / ชื่อ-สกุล / เลขบัตร ปชช. / บ้านเลขที่..."
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+
+            {/* Filter by Result */}
+            <div>
+              <select
+                value={filterResult}
+                onChange={(e) => setFilterResult(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="all">ผลตรวจคัดกรองทั้งหมด</option>
+                <option value="positive">เฉพาะ ผลบวก Positive (1B0061)</option>
+                <option value="negative">เฉพาะ ผลลบ Negative (1B0060)</option>
+                <option value="inconclusive">เฉพาะ ออกผลไม่ได้ (Inconclusive)</option>
+                <option value="pending">เฉพาะ รอผลแล็บ/ยังไม่ได้ตรวจ</option>
+              </select>
+            </div>
+
+            {/* Filter by Kit Status & Vitals */}
+            <div>
+              <select
+                value={filterKitStatus}
+                onChange={(e) => setFilterKitStatus(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="all">สถานะชุดตรวจ/สุขภาพทั้งหมด</option>
+                <option value="received">เฉพาะ ส่งชุดตรวจ / บันทึกสุขภาพแล้ว</option>
+                <option value="not_received">เฉพาะ ยังไม่ส่งชุดตรวจ</option>
+              </select>
+            </div>
+
+            {/* Filter by Village */}
+            <div>
+              <select
+                value={filterVillage}
+                onChange={(e) => setFilterVillage(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="all">ทุกหมู่บ้าน (อ.โพนนาแก้ว)</option>
+                {VILLAGE_LIST.map((v) => (
+                  <option key={v.no} value={v.no}>
+                    หมู่ {v.no} {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Filter by Result */}
-          <div>
-            <select
-              value={filterResult}
-              onChange={(e) => setFilterResult(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">ผลตรวจคัดกรองทั้งหมด</option>
-              <option value="positive">เฉพาะ ผลบวก Positive (1B0061)</option>
-              <option value="negative">เฉพาะ ผลลบ Negative (1B0060)</option>
-              <option value="inconclusive">เฉพาะ ออกผลไม่ได้ (Inconclusive)</option>
-              <option value="pending">เฉพาะ รอผลแล็บ/ยังไม่ได้ตรวจ</option>
-            </select>
+          {/* Row 2: Tested Date Filter Bar (การกรองข้อมูล ว/ด/ป ที่ตรวจ) */}
+          <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900 flex-shrink-0">
+                <Calendar className="w-4 h-4 text-emerald-700" />
+                <span>กรองข้อมูล ว/ด/ป ที่ตรวจ:</span>
+              </div>
+
+              {/* Preset Selector */}
+              <select
+                value={filterDatePreset}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setFilterDatePreset(val);
+                  if (val === 'today' || val === 'last7days' || val === 'thisMonth' || val === 'all') {
+                    setQuickDatePreset(val as any);
+                  } else if (val === 'not_tested' || val === 'tested_any') {
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                  }
+                }}
+                className="px-3 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+              >
+                <option value="all">📅 ทุกวันที่ตรวจ (ทั้งหมด)</option>
+                <option value="today">⚡ ตรวจวันนี้</option>
+                <option value="last7days">🗓️ ตรวจ 7 วันล่าสุด</option>
+                <option value="thisMonth">📆 ตรวจในเดือนนี้</option>
+                <option value="custom">✏️ ระบุช่วงวันที่ตรวจเอง...</option>
+                <option value="tested_any">✅ เฉพาะตรวจแล็บแล้ว (มีวันที่)</option>
+                <option value="not_tested">⏳ ยังไม่ได้ตรวจแล็บ (ไม่มีวันที่)</option>
+              </select>
+
+              {/* Date Pickers */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 text-[11px]">ตั้งแต่:</span>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => {
+                    setFilterStartDate(e.target.value);
+                    setFilterDatePreset('custom');
+                  }}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-700 shadow-2xs"
+                  placeholder="วว/ดด/ปปปป"
+                />
+                <span className="text-slate-500 text-[11px]">ถึง:</span>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => {
+                    setFilterEndDate(e.target.value);
+                    setFilterDatePreset('custom');
+                  }}
+                  className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-slate-700 shadow-2xs"
+                  placeholder="วว/ดด/ปปปป"
+                />
+              </div>
+
+              {/* Quick Preset Chips */}
+              <div className="hidden lg:flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setQuickDatePreset('today')}
+                  className={`px-2.5 py-1 text-[11px] rounded-lg border transition-colors ${
+                    filterDatePreset === 'today'
+                      ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  วันนี้
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickDatePreset('last7days')}
+                  className={`px-2.5 py-1 text-[11px] rounded-lg border transition-colors ${
+                    filterDatePreset === 'last7days'
+                      ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  7 วันล่าสุด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickDatePreset('thisMonth')}
+                  className={`px-2.5 py-1 text-[11px] rounded-lg border transition-colors ${
+                    filterDatePreset === 'thisMonth'
+                      ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  เดือนนี้
+                </button>
+              </div>
+            </div>
+
+            {/* Clear Filters Button */}
+            <div className="flex items-center gap-2 self-end md:self-auto">
+              {(filterStartDate || filterEndDate || filterDatePreset !== 'all' || searchQuery || filterResult !== 'all' || filterKitStatus !== 'all' || filterVillage !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilterResult('all');
+                    setFilterKitStatus('all');
+                    setFilterVillage('all');
+                    setFilterDatePreset('all');
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                  }}
+                  className="px-2.5 py-1.5 text-xs text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 font-medium bg-white shadow-2xs"
+                >
+                  <RotateCcw className="w-3 h-3 text-rose-500" />
+                  <span>ล้างตัวกรองทั้งหมด</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Filter by Kit Status & Vitals */}
-          <div>
-            <select
-              value={filterKitStatus}
-              onChange={(e) => setFilterKitStatus(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">สถานะชุดตรวจ/สุขภาพทั้งหมด</option>
-              <option value="received">เฉพาะ ส่งชุดตรวจ / บันทึกสุขภาพแล้ว</option>
-              <option value="not_received">เฉพาะ ยังไม่ส่งชุดตรวจ</option>
-            </select>
-          </div>
-
-          {/* Filter by Village */}
-          <div>
-            <select
-              value={filterVillage}
-              onChange={(e) => setFilterVillage(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="all">ทุกหมู่บ้าน (อ.โพนนาแก้ว)</option>
-              {VILLAGE_LIST.map((v) => (
-                <option key={v.no} value={v.no}>
-                  หมู่ {v.no} {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Active Date Filter Notice Badge */}
+          {(filterStartDate || filterEndDate || (filterDatePreset !== 'all' && filterDatePreset !== 'custom')) && (
+            <div className="flex items-center gap-2 text-xs text-emerald-800 bg-white px-3 py-1.5 rounded-lg border border-emerald-200 w-fit">
+              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+              <span>
+                กำลังกรองวันที่ตรวจ: {
+                  filterDatePreset === 'today'
+                    ? 'ตรวจวันนี้'
+                    : filterDatePreset === 'last7days'
+                    ? 'ตรวจ 7 วันล่าสุด'
+                    : filterDatePreset === 'thisMonth'
+                    ? 'ตรวจในเดือนนี้'
+                    : filterDatePreset === 'not_tested'
+                    ? 'ยังไม่ได้ตรวจแล็บ'
+                    : filterDatePreset === 'tested_any'
+                    ? 'ตรวจแล็บแล้วทั้งหมด'
+                    : `${filterStartDate || 'เริ่มต้น'} ถึง ${filterEndDate || 'ปัจจุบัน'}`
+                }
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterDatePreset('all');
+                  setFilterStartDate('');
+                  setFilterEndDate('');
+                }}
+                className="text-slate-400 hover:text-rose-600 ml-1 p-0.5 rounded"
+                title="ยกเลิกการกรองวันที่"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -320,6 +579,17 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                           <span>สติกเกอร์</span>
                         </button>
                       )}
+                      {(p.kitStatus === 'received' || p.kitStatus === 'tested' || p.heightCm || p.weightKg || p.bloodPressureSys) && (
+                        <button
+                          type="button"
+                          onClick={() => setCancelKitPatient(p)}
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="กดยกเลิกการส่งชุดตรวจ/บันทึกสุขภาพแล้ว"
+                        >
+                          <RotateCcw className="w-3 h-3 text-amber-600" />
+                          <span>ยกเลิกส่งชุด</span>
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       {onEditPatient && (
@@ -407,12 +677,23 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         {p.kitStatus === 'tested' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            ตรวจแล็บแล้ว
-                          </span>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              ตรวจแล็บแล้ว
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setCancelKitPatient(p)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-medium text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition-colors"
+                              title="กดยกเลิกการส่งชุดตรวจ/บันทึกสุขภาพ"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
+                              <span>ยกเลิกส่งชุด</span>
+                            </button>
+                          </div>
                         ) : (p.kitStatus === 'received' || p.heightCm || p.weightKg || p.bloodPressureSys) ? (
-                          <div className="inline-flex flex-col items-center">
+                          <div className="inline-flex flex-col items-center gap-1">
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200">
                               <CheckCircle2 className="w-3 h-3 text-blue-600" />
                               ส่งชุด/บันทึกแล้ว
@@ -420,6 +701,15 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                             {p.kitReceivedDate && (
                               <span className="text-[9px] text-blue-600 font-mono mt-0.5">{p.kitReceivedDate}</span>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => setCancelKitPatient(p)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-semibold text-amber-800 hover:text-amber-900 bg-amber-100/80 hover:bg-amber-200 border border-amber-300 rounded shadow-2xs transition-colors"
+                              title="กดยกเลิกการส่งชุดตรวจ/บันทึกข้อมูลสุขภาพ"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5 text-amber-700" />
+                              <span>ยกเลิกส่งชุดตรวจ</span>
+                            </button>
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
@@ -517,6 +807,16 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                               <span>บันทึกสุขภาพ</span>
                             </button>
                           )}
+                          {(p.kitStatus === 'received' || p.kitStatus === 'tested' || p.heightCm || p.weightKg || p.bloodPressureSys) && (
+                            <button
+                              type="button"
+                              onClick={() => setCancelKitPatient(p)}
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="กดยกเลิกสถานะส่งชุดตรวจ/บันทึกข้อมูลสุขภาพแล้ว"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {onEditPatient && (
                             <button
                               type="button"
@@ -547,6 +847,22 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Cancel Sent Kit Modal */}
+      <CancelKitModal
+        patient={cancelKitPatient}
+        isOpen={Boolean(cancelKitPatient)}
+        onClose={() => setCancelKitPatient(null)}
+        onConfirmCancel={handleConfirmCancelKit}
+      />
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 right-4 sm:right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-slate-700 text-xs flex items-center gap-2 animate-fade-in no-print">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span className="flex-1 font-medium">{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 };

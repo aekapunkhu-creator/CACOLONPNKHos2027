@@ -502,6 +502,7 @@ export default function App() {
         {activeTab === 'all-list' && (
           <AllScreeningListView
             patients={patients}
+            onUpdatePatient={handleUpdatePatient}
             onNavigateToReferral={handleNavigateToReferral}
             onNavigateToStickerPrint={handleNavigateToStickerPrint}
             onEditPatient={handleOpenEditModal}
