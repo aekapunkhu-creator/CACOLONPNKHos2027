@@ -18,6 +18,7 @@ import { SampleReceiveView } from './components/SampleReceiveView';
 import { ResultEntryView } from './components/ResultEntryView';
 import { ReferralView } from './components/ReferralView';
 import { CaColonTrackingView } from './components/CaColonTrackingView';
+import { MapColonView } from './components/MapColonView';
 import { AllScreeningListView } from './components/AllScreeningListView';
 import { ReferralPrintDocument } from './components/ReferralPrintDocument';
 import { LoginView } from './components/LoginView';
@@ -61,7 +62,16 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Merge initial locations if not yet present in existing storage
+          return parsed.map((p: PatientScreening) => {
+            if (!p.location) {
+              const match = INITIAL_PATIENTS.find((init) => init.id === p.id);
+              if (match?.location) {
+                return { ...p, location: match.location };
+              }
+            }
+            return p;
+          });
         }
       }
     } catch (e) {
@@ -308,6 +318,11 @@ export default function App() {
     setActiveTab('sticker-print');
   };
 
+  const handleNavigateToMap = (hn?: string) => {
+    setTargetHnForNextTab(hn);
+    setActiveTab('map-colon');
+  };
+
   // Print Handlers
   const handlePrintIndividual = (patient: PatientScreening) => {
     setPatientsToPrint([patient]);
@@ -499,12 +514,24 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'map-colon' && (
+          <MapColonView
+            patients={patients}
+            initialHn={targetHnForNextTab}
+            onUpdatePatient={handleUpdatePatient}
+            onNavigateToReferral={handleNavigateToReferral}
+            onNavigateToTracking={() => setActiveTab('ca-colon-tracking')}
+            isWidescreen16x9={isWidescreen16x9}
+          />
+        )}
+
         {activeTab === 'all-list' && (
           <AllScreeningListView
             patients={patients}
             onUpdatePatient={handleUpdatePatient}
             onNavigateToReferral={handleNavigateToReferral}
             onNavigateToStickerPrint={handleNavigateToStickerPrint}
+            onNavigateToMap={handleNavigateToMap}
             onEditPatient={handleOpenEditModal}
             onDeletePatient={handleOpenDeleteModal}
             currentUser={currentUser}

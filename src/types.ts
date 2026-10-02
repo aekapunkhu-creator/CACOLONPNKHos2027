@@ -143,6 +143,22 @@ export interface PatientScreening {
 
   // หน้าติดตาม ผู้ป่วยสงสัย/CA Colon (Patient Journey & Clinical Tracking)
   caTracking?: CaColonTracking;
+
+  // แผนที่บ้านผู้ป่วย (Map Colon: พิกัดบ้าน & อสม. ผู้ดูแล)
+  location?: PatientLocation;
+}
+
+export interface PatientLocation {
+  lat: number;
+  lng: number;
+  addressDetails?: string; // รายละเอียดบ้าน/จุดสังเกต
+  landmark?: string; // จุดสังเกตเด่น เช่น ใกล้วัด, ตรงข้ามโรงเรียน
+  osmName?: string; // อสม. ผู้รับผิดชอบ/ผู้ดูแล
+  osmPhone?: string; // เบอร์โทร อสม.
+  visitStatus?: 'not_visited' | 'visited' | 'followup_needed'; // สถานะการลงเยี่ยมบ้าน
+  visitNotes?: string; // บันทึกการลงพื้นที่เยี่ยมบ้าน
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface VillageSummary {

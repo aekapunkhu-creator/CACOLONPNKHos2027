@@ -22,7 +22,8 @@ import {
   Calendar,
   X,
   XCircle,
-  PackageX
+  PackageX,
+  MapPin
 } from 'lucide-react';
 import { UserAccount } from '../types';
 import { CancelKitModal } from './CancelKitModal';
@@ -31,6 +32,7 @@ interface AllScreeningListViewProps {
   patients: PatientScreening[];
   onNavigateToReferral: (hn: string) => void;
   onNavigateToStickerPrint?: (hn: string) => void;
+  onNavigateToMap?: (hn: string) => void;
   onEditPatient?: (patient: PatientScreening) => void;
   onDeletePatient?: (patient: PatientScreening) => void;
   onSelectPatientForVitals?: (patient: PatientScreening) => void;
@@ -42,6 +44,7 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
   patients,
   onNavigateToReferral,
   onNavigateToStickerPrint,
+  onNavigateToMap,
   onEditPatient,
   onDeletePatient,
   onSelectPatientForVitals,
@@ -579,6 +582,17 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                           <span>สติกเกอร์</span>
                         </button>
                       )}
+                      {onNavigateToMap && (
+                        <button
+                          type="button"
+                          onClick={() => onNavigateToMap(p.hn)}
+                          className="px-2 py-1 bg-slate-50 text-slate-700 hover:bg-slate-100 rounded text-xs font-semibold flex items-center gap-1 border border-slate-200"
+                          title="ดูแผนที่บ้านผู้ป่วย (Map Colon)"
+                        >
+                          <MapPin className={`w-3 h-3 ${p.location?.lat ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <span>แผนที่บ้าน</span>
+                        </button>
+                      )}
                       {(p.kitStatus === 'received' || p.kitStatus === 'tested' || p.heightCm || p.weightKg || p.bloodPressureSys) && (
                         <button
                           type="button"
@@ -673,7 +687,22 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                         {p.idCard}
                       </td>
                       <td className="px-3 py-3 text-slate-700 whitespace-nowrap">
-                        {p.houseNo} ม.{p.villageNo}
+                        {onNavigateToMap ? (
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToMap(p.hn)}
+                            className="hover:underline flex items-center gap-1 group text-left font-medium"
+                            title="เปิดพิกัดแผนที่บ้านผู้ป่วย (Map Colon)"
+                          >
+                            <MapPin className={`w-3.5 h-3.5 flex-shrink-0 ${p.location?.lat ? 'text-emerald-600' : 'text-slate-300 group-hover:text-amber-500'}`} />
+                            <span>{p.houseNo} ม.{p.villageNo}</span>
+                            {p.location?.lat && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" title="มีพิกัดบ้านแล้ว" />
+                            )}
+                          </button>
+                        ) : (
+                          `${p.houseNo} ม.${p.villageNo}`
+                        )}
                       </td>
                       <td className="px-3 py-3 text-center whitespace-nowrap">
                         {p.kitStatus === 'tested' ? (
@@ -815,6 +844,16 @@ export const AllScreeningListView: React.FC<AllScreeningListViewProps> = ({
                               title="กดยกเลิกสถานะส่งชุดตรวจ/บันทึกข้อมูลสุขภาพแล้ว"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onNavigateToMap && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToMap(p.hn)}
+                              className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title={p.location?.lat ? "ดูแผนที่บ้านผู้ป่วย (Map Colon)" : "ปักหมุดแผนที่บ้าน (Map Colon)"}
+                            >
+                              <MapPin className={`w-3.5 h-3.5 ${p.location?.lat ? 'text-emerald-600' : 'text-slate-400'}`} />
                             </button>
                           )}
                           {onEditPatient && (

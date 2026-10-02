@@ -12,11 +12,17 @@ import {
   onSnapshot, 
   getDocs, 
   writeBatch,
-  getDocFromCache
+  getDocFromCache,
+  setLogLevel
 } from 'firebase/firestore';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 import { PatientScreening } from '../types';
 import { INITIAL_PATIENTS } from '../mockData';
+
+// Set Firestore log level to error to avoid clock-skew warning messages in sandboxed dev environments
+try {
+  setLogLevel('error');
+} catch {}
 
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfigJson) : getApp();

@@ -7,7 +7,8 @@ import {
   FileText, 
   Users,
   Printer,
-  Stethoscope
+  Stethoscope,
+  MapPin
 } from 'lucide-react';
 
 export type TabId = 
@@ -18,6 +19,7 @@ export type TabId =
   | 'result-entry'
   | 'referral'
   | 'ca-colon-tracking'
+  | 'map-colon'
   | 'all-list';
 
 interface NavigationProps {
@@ -98,8 +100,16 @@ export const Navigation: React.FC<NavigationProps> = ({
       badgeColor: overdueCount > 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-amber-100 text-amber-800'
     },
     {
+      id: 'map-colon' as TabId,
+      name: '8. Map Colon',
+      shortName: 'Map Colon',
+      desc: 'แผนที่บ้านผู้ป่วย & พิกัด อสม.',
+      icon: MapPin,
+      badge: null
+    },
+    {
       id: 'all-list' as TabId,
-      name: '8. รายชื่อทั้งหมด',
+      name: '9. รายชื่อทั้งหมด',
       shortName: 'รายชื่อ',
       desc: 'ตารางข้อมูลครบ & ส่งออก Excel',
       icon: Users,
@@ -152,7 +162,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       </nav>
 
       {/* Mobile Phone Fixed Bottom Navigation Bar (สำหรับหน้าจอโทรศัพท์มือถือ) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-1 py-1 shadow-lg no-print flex items-center justify-around">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1 shadow-lg no-print flex items-center gap-1 overflow-x-auto scrollbar-none">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -161,8 +171,8 @@ export const Navigation: React.FC<NavigationProps> = ({
             <button
               key={tab.id}
               onClick={() => onSelectTab(tab.id)}
-              className={`flex flex-col items-center justify-center py-1 px-1.5 rounded-lg flex-1 min-w-0 transition-colors relative ${
-                isActive ? 'text-emerald-700 font-bold' : 'text-slate-500 hover:text-slate-800'
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg flex-shrink-0 min-w-[58px] transition-colors relative ${
+                isActive ? 'text-emerald-700 font-bold bg-emerald-50' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               <div className="relative">

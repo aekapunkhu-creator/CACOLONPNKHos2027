@@ -71,6 +71,16 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
       companionName: 'นางมาลี วงค์อินทร์ (ภรรยา)',
       companionPhone: '089-876-5432',
       clinicalNotes: 'มีประวัติความดันโลหิตสูง ควบคุมได้ดี ไม่ได้รับประทานยาละลายลิ่มเลือด'
+    },
+    location: {
+      lat: 17.1652,
+      lng: 104.3085,
+      addressDetails: 'บ้านเลขที่ 45/1 ม.2 บ้านนาเดื่อ ต.นาแก้ว อ.โพนนาแก้ว',
+      landmark: 'ตรงข้ามร้านค้าป้าจันทร์ ติดถนนกลางหมู่บ้าน',
+      osmName: 'นางมาลี บำรุงจิต (อสม. ม.2)',
+      osmPhone: '089-111-2233',
+      visitStatus: 'visited',
+      visitNotes: 'ลงเยี่ยมบ้านร่วมกับ จนท. แนะนำเตรียมลำไส้ก่อนนัดส่องกล้อง รพ.สกลนคร'
     }
   },
   {
@@ -105,7 +115,17 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     testedDate: '2026-09-11 10:20',
     testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
     testLotNo: 'FIT-202609A',
-    notes: 'ผลตรวจเป็นลบ (Negative 1B0060) นัดตรวจซ้ำอีก 2 ปี'
+    notes: 'ผลตรวจเป็นลบ (Negative 1B0060) นัดตรวจซ้ำอีก 2 ปี',
+    location: {
+      lat: 17.1638,
+      lng: 104.3092,
+      addressDetails: 'บ้านเลขที่ 12 ม.2 บ้านนาเดื่อ ต.นาแก้ว อ.โพนนาแก้ว',
+      landmark: 'ซอยข้างวัดโพธิ์ศรี บ้านปูนชั้นเดียวสีครีม',
+      osmName: 'นางพยอม แก้วเพชร (อสม. ม.2)',
+      osmPhone: '081-222-3344',
+      visitStatus: 'visited',
+      visitNotes: 'แจ้งผลตรวจ 1B0060 ผลปกติ แนะนำตรวจซ้ำทุก 2 ปี'
+    }
   },
   {
     id: 'pt-003',
@@ -188,6 +208,16 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
         }
       ],
       clinicalNotes: '⚠️ เกินกำหนด 7 วันยังไม่สามารถติดต่อยืนยันวันนัดได้ ประสาน อสม. ม.2 (นางพยอม) ช่วยติดตามที่บ้าน'
+    },
+    location: {
+      lat: 17.1670,
+      lng: 104.3060,
+      addressDetails: 'บ้านเลขที่ 104 ม.2 บ้านนาเดื่อ ต.นาแก้ว อ.โพนนาแก้ว',
+      landmark: 'ติดหนองน้ำสาธารณะ บ้านไม้ยกสูงหลังคาสีเขียว',
+      osmName: 'นางพยอม แก้วเพชร (อสม. ม.2)',
+      osmPhone: '081-222-3344',
+      visitStatus: 'followup_needed',
+      visitNotes: 'โทรติดต่อไม่ได้ อสม. ลงพื้นที่ติดตามตัวที่บ้านเพื่อแจ้งวันนัดส่องกล้อง'
     }
   },
   {
@@ -220,7 +250,17 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     fitResult: 'negative',
     testedDate: '2026-09-11 10:35',
     testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
-    testLotNo: 'FIT-202609A'
+    testLotNo: 'FIT-202609A',
+    location: {
+      lat: 17.1725,
+      lng: 104.3168,
+      addressDetails: 'บ้านเลขที่ 23 ม.3 บ้านกลาง ต.นาแก้ว อ.โพนนาแก้ว',
+      landmark: 'ใกล้ศาลาประชาคมบ้านกลาง ตรงข้ามโรงสีข้าวชุมชน',
+      osmName: 'นายวิเชียร สมใจ (อสม. ม.3)',
+      osmPhone: '084-555-6677',
+      visitStatus: 'visited',
+      visitNotes: 'แจ้งผลตรวจสุขภาพและผลคัดกรอง FIT ปกติ'
+    }
   },
   {
     id: 'pt-006',
