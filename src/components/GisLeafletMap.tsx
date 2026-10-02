@@ -132,11 +132,13 @@ export const GisLeafletMap: React.FC<GisLeafletMapProps> = ({
       const isNegative = p.fitResult === 'negative';
       const isSelected = selectedPatient?.id === p.id;
 
-      const pinColor = isPositive ? '#e11d48' : isNegative ? '#059669' : '#d97706';
+      const isAdeno = p.caTracking?.biopsyResult === 'adenocarcinoma';
+      const pinColor = isAdeno ? '#b91c1c' : isPositive ? '#e11d48' : isNegative ? '#059669' : '#d97706';
+      
       const iconHtml = `
         <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer; transform: ${isSelected ? 'scale(1.25)' : 'scale(1)'}; transition: transform 0.2s;">
           <div style="width: 32px; height: 32px; border-radius: 50%; background: ${pinColor}; border: 2.5px solid #ffffff; box-shadow: 0 4px 10px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: white;">
-            ${isPositive ? '⚠️' : isNegative ? '✓' : '📍'}
+            ${isAdeno ? '🎗️' : isPositive ? '⚠️' : isNegative ? '✓' : '📍'}
           </div>
           <div style="margin-top: 2px; background: rgba(15, 23, 42, 0.9); color: #ffffff; font-size: 10px; font-weight: bold; padding: 1px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25); white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
             ${p.houseNo} ม.${p.villageNo}
@@ -154,38 +156,73 @@ export const GisLeafletMap: React.FC<GisLeafletMapProps> = ({
 
       const marker = L.marker([p.location.lat, p.location.lng], { icon: customIcon });
 
+      const lineMessage = encodeURIComponent(
+        `📍 พิกัดบ้านผู้ป่วย: ${p.prefix}${p.firstName} ${p.lastName} (HN: ${p.hn})\n` +
+        `🏠 ที่อยู่: บ้านเลขที่ ${p.houseNo} ม.${p.villageNo} ${p.villageName || ''} ต.${p.subdistrict || 'นาแก้ว'}\n` +
+        `🎗️ ผลวินิจฉัย: ${isAdeno ? 'มะเร็งลำไส้ใหญ่ (Adenocarcinoma) ' + (p.caTracking?.cancerStaging || '') : 'กลุ่มคัดกรอง FIT'}\n` +
+        `📌 ละติจูด (Lat): ${p.location.lat.toFixed(6)}\n` +
+        `📌 ลองจิจูด (Lng): ${p.location.lng.toFixed(6)}\n` +
+        (p.location.landmark ? `🚩 จุดสังเกต: ${p.location.landmark}\n` : '') +
+        (p.phone ? `📞 โทรผู้ป่วย: ${p.phone}\n` : '') +
+        (p.location.osmName ? `🩺 อสม.: ${p.location.osmName} ${p.location.osmPhone ? '(' + p.location.osmPhone + ')' : ''}\n` : '') +
+        `🧭 ลิงก์ปักหมุด Google Maps: https://www.google.com/maps?q=${p.location.lat.toFixed(6)},${p.location.lng.toFixed(6)}`
+      );
+
       // Build popup HTML
       const popupHtml = `
-        <div style="font-family: inherit; font-size: 12px; line-height: 1.4; color: #1e293b; min-width: 240px; padding: 2px;">
+        <div style="font-family: inherit; font-size: 12px; line-height: 1.4; color: #1e293b; min-width: 250px; padding: 2px;">
           <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 6px;">
             <div>
               <strong style="font-size: 13px; color: #0f172a;">${p.prefix}${p.firstName} ${p.lastName}</strong>
               <div style="font-size: 10px; color: #64748b;">HN: ${p.hn} • อายุ ${p.ageYears} ปี (${p.gender})</div>
             </div>
             <span style="font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 9999px; ${
-              isPositive
+              isAdeno
+                ? 'background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;'
+                : isPositive
                 ? 'background: #ffe4e6; color: #9f1239; border: 1px solid #fecdd3;'
                 : 'background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;'
             }">
-              ${isPositive ? '🔴 ผลบวก (1B0061)' : '🟢 ผลลบ (1B0060)'}
+              ${isAdeno ? '🔴 มะเร็งลำไส้ใหญ่' : isPositive ? '⚠️ ผลบวก FIT+' : '🟢 ผลลบ FIT-'}
             </span>
           </div>
+
+          ${isAdeno ? `
+            <div style="background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 4px 6px; border-radius: 6px; font-size: 11px; margin-bottom: 6px;">
+              <strong>ผลชิ้นเนื้อ:</strong> มะเร็งลำไส้ใหญ่ (Adenocarcinoma) ${p.caTracking?.cancerStaging ? `• ${p.caTracking.cancerStaging}` : ''}
+              ${p.caTracking?.treatmentPlan ? `<div style="font-size: 10px; color: #7f1d1d; margin-top: 2px;">แผน: ${p.caTracking.treatmentPlan}</div>` : ''}
+            </div>
+          ` : ''}
+
           <div style="margin-bottom: 6px;">
             <strong>ที่อยู่:</strong> บ้านเลขที่ ${p.houseNo} ม.${p.villageNo} ${p.villageName || ''} ต.${p.subdistrict || 'นาแก้ว'}
           </div>
+
+          <!-- Latitude & Longitude Block -->
+          <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px; font-family: monospace; font-size: 11px; color: #0f172a;">
+            <div><strong style="color: #047857;">Latitude (ละติจูด):</strong> ${p.location.lat.toFixed(6)}</div>
+            <div><strong style="color: #047857;">Longitude (ลองจิจูด):</strong> ${p.location.lng.toFixed(6)}</div>
+          </div>
+
           ${p.location.landmark ? `
             <div style="background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 4px 6px; border-radius: 6px; font-size: 11px; margin-bottom: 6px;">
-              <strong>จุดสังเกต:</strong> ${p.location.landmark}
+              <strong>จุดสังเกตเด่น:</strong> ${p.location.landmark}
             </div>
           ` : ''}
+
           ${p.location.osmName ? `
             <div style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 4px 6px; border-radius: 6px; font-size: 11px; margin-bottom: 6px;">
               <strong>อสม. ผู้ดูแล:</strong> ${p.location.osmName} ${p.location.osmPhone ? `(${p.location.osmPhone})` : ''}
             </div>
           ` : ''}
+
+          <!-- Action Buttons -->
           <div style="display: flex; gap: 4px; margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 6px;">
-            <a href="https://www.google.com/maps/dir/?api=1&destination=${p.location.lat},${p.location.lng}" target="_blank" rel="noreferrer" style="flex: 1; text-align: center; background: #2563eb; color: #ffffff; padding: 5px 8px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-              🧭 นำทาง Google Maps
+            <a href="https://line.me/R/msg/text/?${lineMessage}" target="_blank" rel="noreferrer" style="flex: 1; text-align: center; background: #06c755; color: #ffffff; padding: 5px 6px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+              💬 ส่งลิงก์ LINE
+            </a>
+            <a href="https://www.google.com/maps/dir/?api=1&destination=${p.location.lat},${p.location.lng}" target="_blank" rel="noreferrer" style="flex: 1; text-align: center; background: #2563eb; color: #ffffff; padding: 5px 6px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: bold; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+              🧭 Google Maps
             </a>
           </div>
         </div>

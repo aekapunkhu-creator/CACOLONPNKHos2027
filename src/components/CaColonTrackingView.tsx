@@ -23,7 +23,8 @@ import {
   ChevronRight,
   Stethoscope,
   Microscope,
-  HelpCircle
+  HelpCircle,
+  MapPin
 } from 'lucide-react';
 import { PatientJourneyModal } from './PatientJourneyModal';
 import { QuickCallLogModal } from './QuickCallLogModal';
@@ -33,11 +34,13 @@ import { QuickColonoscopyModal } from './QuickColonoscopyModal';
 interface CaColonTrackingViewProps {
   patients: PatientScreening[];
   onUpdatePatient: (updated: PatientScreening) => void;
+  onNavigateToMap?: (hn: string) => void;
 }
 
 export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
   patients,
-  onUpdatePatient
+  onUpdatePatient,
+  onNavigateToMap
 }) => {
   // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -621,6 +624,24 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                           >
                             <Activity className="w-4 h-4" />
                           </button>
+
+                          {/* Map Colon Navigation */}
+                          {onNavigateToMap && (
+                            <button
+                              type="button"
+                              title={patient.caTracking?.biopsyResult === 'adenocarcinoma' 
+                                ? "เปิดแผนที่พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Map Colon)" 
+                                : "เปิดแผนที่และปักหมุดบ้าน"}
+                              onClick={() => onNavigateToMap(patient.hn)}
+                              className={`p-1.5 rounded-lg border transition-colors ${
+                                patient.caTracking?.biopsyResult === 'adenocarcinoma'
+                                  ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-300 ring-2 ring-rose-400/30'
+                                  : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                              }`}
+                            >
+                              <MapPin className="w-4 h-4" />
+                            </button>
+                          )}
 
                           {/* Detail / Patient Journey */}
                           <button

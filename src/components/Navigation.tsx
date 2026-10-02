@@ -103,7 +103,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       id: 'map-colon' as TabId,
       name: '8. Map Colon',
       shortName: 'Map Colon',
-      desc: 'แผนที่บ้านผู้ป่วย & พิกัด อสม.',
+      desc: 'ผู้ป่วย Adenocarcinoma & พิกัดบ้าน',
       icon: MapPin,
       badge: null
     },

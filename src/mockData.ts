@@ -66,21 +66,31 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
       appointmentTime: '08:30',
       hospitalName: 'โรงพยาบาลสกลนคร',
       department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร (Endoscopy Unit)',
-      bowelPrepStatus: 'received_meds',
-      bowelPrepNotes: 'รับยาระบาย Swiff 2 ขวด พร้อมเอกสารคำแนะนำแล้ว แนะนำงดอาหารกากใย 3 วันก่อนตรวจ',
+      bowelPrepStatus: 'prep_completed',
+      bowelPrepNotes: 'รับยาระบาย Swiff 2 ขวด เตรียมลำไส้สะอาดดีมาก',
+      colonoscopyDate: '2026-09-28',
+      colonoscopyHospital: 'โรงพยาบาลสกลนคร',
+      colonoscopyDoctor: 'นพ.อภิชาติ ปัญญาเลิศ',
+      colonoscopyFinding: 'suspected_cancer',
+      colonoscopyDetails: 'พบก้อนเนื้อลักษณะคล้ายมะเร็ง ขนาด 3.5 ซม. ที่ Sigmoid Colon ตัดชิ้นเนื้อส่งตรวจพยาธิวิทยา',
+      biopsyDate: '2026-10-01',
+      biopsyResult: 'adenocarcinoma',
+      biopsyDetails: 'ผลพยาธิวิทยา: Invasive Adenocarcinoma (Moderately differentiated)',
+      cancerStaging: 'Stage II (T3N0M0)',
+      treatmentPlan: 'ส่งต่อศัลยกรรม รพ.สกลนคร นัดผ่าตัด Right/Sigmoid Colectomy',
       companionName: 'นางมาลี วงค์อินทร์ (ภรรยา)',
       companionPhone: '089-876-5432',
-      clinicalNotes: 'มีประวัติความดันโลหิตสูง ควบคุมได้ดี ไม่ได้รับประทานยาละลายลิ่มเลือด'
+      clinicalNotes: 'วินิจฉัยยืนยันมะเร็งลำไส้ใหญ่ (Adenocarcinoma) นัดผ่าตัด รพ.สกลนคร หมอครอบครัวลงเยี่ยมบ้านติดตามอาการ'
     },
     location: {
-      lat: 17.1652,
-      lng: 104.3085,
+      lat: 17.165200,
+      lng: 104.308500,
       addressDetails: 'บ้านเลขที่ 45/1 ม.2 บ้านนาเดื่อ ต.นาแก้ว อ.โพนนาแก้ว',
       landmark: 'ตรงข้ามร้านค้าป้าจันทร์ ติดถนนกลางหมู่บ้าน',
       osmName: 'นางมาลี บำรุงจิต (อสม. ม.2)',
       osmPhone: '089-111-2233',
       visitStatus: 'visited',
-      visitNotes: 'ลงเยี่ยมบ้านร่วมกับ จนท. แนะนำเตรียมลำไส้ก่อนนัดส่องกล้อง รพ.สกลนคร'
+      visitNotes: 'ลงเยี่ยมบ้านร่วมกับ จนท. แนะนำเตรียมความพร้อมก่อนการรักษาผ่าตัดมะเร็งลำไส้ใหญ่'
     }
   },
   {
@@ -195,29 +205,36 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     testLotNo: 'FIT-202609A',
     notes: 'Positive ชัดเจน รอส่งต่อตรวจส่องกล้อง',
     caTracking: {
-      status: 'pending_contact',
+      status: 'biopsy_reported',
       fitPositiveDate: '2026-09-11',
-      callLogs: [
-        {
-          id: 'call-2',
-          date: '2026-09-14 10:30',
-          caller: 'นายเอกพันธ์ ขันติ',
-          phone: '089-234-5678',
-          outcome: 'no_answer',
-          notes: 'โทรครั้งที่ 1 สัญญาณติดแต่ไม่มีผู้รับสาย'
-        }
-      ],
-      clinicalNotes: '⚠️ เกินกำหนด 7 วันยังไม่สามารถติดต่อยืนยันวันนัดได้ ประสาน อสม. ม.2 (นางพยอม) ช่วยติดตามที่บ้าน'
+      appointmentDate: '2026-09-25',
+      appointmentTime: '09:00',
+      hospitalName: 'โรงพยาบาลสกลนคร',
+      department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร',
+      bowelPrepStatus: 'prep_completed',
+      colonoscopyDate: '2026-09-25',
+      colonoscopyHospital: 'โรงพยาบาลสกลนคร',
+      colonoscopyDoctor: 'นพ.อภิชาติ ปัญญาเลิศ',
+      colonoscopyFinding: 'suspected_cancer',
+      colonoscopyDetails: 'พบก้อนมะเร็งขนาด 3.0 ซม. ที่ Hepatic Flexure ตัดชิ้นเนื้อส่งตรวจ',
+      biopsyDate: '2026-09-30',
+      biopsyResult: 'adenocarcinoma',
+      biopsyDetails: 'ผลพยาธิวิทยา: Adenocarcinoma (Grade 2), with partial lymphatic invasion',
+      cancerStaging: 'Stage III (T3N1M0)',
+      treatmentPlan: 'ศัลยกรรม รพ.สกลนคร นัดผ่าตัดและเตรียมส่งต่อหน่วยเคมีบำบัด',
+      companionName: 'นางสมพร บุญกอง (บุตรสาว)',
+      companionPhone: '089-234-5678',
+      clinicalNotes: 'วินิจฉัยยืนยันมะเร็งลำไส้ใหญ่ระยะที่ 3 ทีมหมอครอบครัวและ อสม. ม.2 ติดตามดูแลเรื่องสภาพจิตใจและโภชนาการ'
     },
     location: {
-      lat: 17.1670,
-      lng: 104.3060,
+      lat: 17.167000,
+      lng: 104.306000,
       addressDetails: 'บ้านเลขที่ 104 ม.2 บ้านนาเดื่อ ต.นาแก้ว อ.โพนนาแก้ว',
       landmark: 'ติดหนองน้ำสาธารณะ บ้านไม้ยกสูงหลังคาสีเขียว',
       osmName: 'นางพยอม แก้วเพชร (อสม. ม.2)',
       osmPhone: '081-222-3344',
-      visitStatus: 'followup_needed',
-      visitNotes: 'โทรติดต่อไม่ได้ อสม. ลงพื้นที่ติดตามตัวที่บ้านเพื่อแจ้งวันนัดส่องกล้อง'
+      visitStatus: 'visited',
+      visitNotes: 'เยี่ยมบ้านร่วมกับ อสม. ให้กำลังใจผู้ป่วยและให้คำแนะนำเรื่องการเตรียมรับเคมีบำบัด'
     }
   },
   {
@@ -556,15 +573,26 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
       colonoscopyDate: '2026-09-15',
       colonoscopyHospital: 'โรงพยาบาลสกลนคร',
       colonoscopyDoctor: 'นพ.อภิชาติ ปัญญาเลิศ',
-      colonoscopyFinding: 'polyps_removed',
-      colonoscopyDetails: 'พบ Sessile polyp ขนาด 1.2 cm ที่ Sigmoid colon และ Pedunculated polyp ขนาด 0.8 cm ที่ Ascending colon ทำ Polypectomy ตัดออกได้ทั้งหมด ไม่มีภาวะแทรกซ้อน',
-      polypCount: 2,
-      polypSizeLocation: 'Sigmoid colon (1.2 cm) และ Ascending colon (0.8 cm)',
+      colonoscopyFinding: 'suspected_cancer',
+      colonoscopyDetails: 'พบก้อนเนื้อลักษณะคล้ายมะเร็ง ขนาด 2.8 cm ที่ Ascending colon ทำการตัดชิ้นเนื้อส่งตรวจ',
+      polypCount: 1,
+      polypSizeLocation: 'Ascending colon (2.8 cm)',
       biopsyDate: '2026-09-20',
-      biopsyResult: 'tubular_adenoma',
-      biopsyDetails: 'ผลพยาธิวิทยา: Tubular adenoma with low-grade dysplasia, surgical margins are free of dysplasia',
-      treatmentPlan: 'แนะนำตรวจส่องกล้องซ้ำ (Surveillance Colonoscopy) ในอีก 3 ปี พร้อมดูแลสุขภาพสม่ำเสมอ',
-      clinicalNotes: 'ผู้ป่วยฟื้นตัวดีมาก ไม่มีอาการปวดท้องหรือถ่ายเป็นเลือด ให้คำแนะนำเรื่องอาหารกากใย'
+      biopsyResult: 'adenocarcinoma',
+      biopsyDetails: 'ผลพยาธิวิทยา: Adenocarcinoma (Well-differentiated) of ascending colon',
+      cancerStaging: 'Stage I (T1N0M0)',
+      treatmentPlan: 'ผ่าตัด Laparoscopic hemicolectomy รพ.สกลนคร เรียบร้อย นัดตรวจติดตามผลเลือดและ CEA ทุก 3 เดือน',
+      clinicalNotes: 'ผู้ป่วยฟื้นตัวดีมาก หลังผ่าตัดไม่มีภาวะแทรกซ้อน ทีม อสม. ม.4 เยี่ยมบ้านดูแลแผลผ่าตัด'
+    },
+    location: {
+      lat: 17.171200,
+      lng: 104.314800,
+      addressDetails: 'บ้านเลขที่ 77 ม.4 บ้านกลางใหม่ ต.นาแก้ว อ.โพนนาแก้ว',
+      landmark: 'ตรงข้ามศาลาประชาคมหมู่บ้าน ใกล้สระน้ำชุมชน',
+      osmName: 'นายสุนทร วงษ์ชาลี (อสม. ม.4)',
+      osmPhone: '085-443-2211',
+      visitStatus: 'visited',
+      visitNotes: 'ลงเยี่ยมบ้านผู้ป่วยหลังทราบผลชิ้นเนื้อและการผ่าตัด ให้คำแนะนำด้านโภชนาการ'
     }
   },
   {
@@ -635,24 +663,31 @@ export const INITIAL_PATIENTS: PatientScreening[] = [
     testedDate: '2026-09-10 14:20',
     testedBy: 'ทนพญ.กนกพร (ห้องปฏิบัติการ)',
     testLotNo: 'FIT-202609A',
-    notes: 'Positive แจ้งเตือนผู้ป่วยปฏิเสธ',
+    notes: 'ผลส่องกล้องยืนยันผลชิ้นเนื้อ Adenocarcinoma รอนัดผ่าตัดและปักหมุดบ้าน',
     caTracking: {
-      status: 'refused',
+      status: 'biopsy_reported',
       fitPositiveDate: '2026-09-10',
       contactDate: '2026-09-13 11:00',
       contactOfficer: 'นายเอกพันธ์ ขันติ',
-      contactNotes: 'ผู้ป่วยแจ้งว่ากลัวเจ็บมาก และไม่มีญาติพาไป รพ.สกลนคร จึงขอปฏิเสธการส่องกล้อง',
-      callLogs: [
-        {
-          id: 'call-16',
-          date: '2026-09-13 11:00',
-          caller: 'นายเอกพันธ์ ขันติ',
-          phone: '082-999-4455',
-          outcome: 'answered_refused',
-          notes: 'ให้ข้อมูลเรื่องยาระงับความรู้สึกและการดูแล แต่ผู้ป่วยยังยืนยันปฏิเสธ'
-        }
-      ],
-      clinicalNotes: 'ผู้ป่วยปฏิเสธการส่องกล้อง อธิบายความเสี่ยงเรื่องมะเร็งระยะเริ่มต้นแล้วยังไม่ยินยอม ประสานทีมหมอครอบครัวและ อสม. ร่วมลงเยี่ยมบ้านให้กำลังใจและสร้างความเข้าใจเพิ่มเติม'
+      contactNotes: 'ผลตรวจส่องกล้องพบก้อนเนื้อและผลชิ้นเนื้อยืนยัน Adenocarcinoma',
+      appointmentDate: '2026-09-22',
+      appointmentTime: '09:00',
+      hospitalName: 'โรงพยาบาลสกลนคร',
+      department: 'ศูนย์ส่องกล้องระบบทางเดินอาหาร',
+      bowelPrepStatus: 'prep_completed',
+      colonoscopyDate: '2026-09-22',
+      colonoscopyHospital: 'โรงพยาบาลสกลนคร',
+      colonoscopyDoctor: 'นพ.อภิชาติ ปัญญาเลิศ',
+      colonoscopyFinding: 'suspected_cancer',
+      colonoscopyDetails: 'พบก้อนมะเร็งขนาด 3.2 cm ที่ Rectosigmoid junction ตัดชิ้นเนื้อส่งตรวจ',
+      biopsyDate: '2026-09-28',
+      biopsyResult: 'adenocarcinoma',
+      biopsyDetails: 'ผลพยาธิวิทยา: Invasive Adenocarcinoma (Moderately differentiated)',
+      cancerStaging: 'Stage II (T3N0M0)',
+      treatmentPlan: 'ศัลยกรรม รพ.สกลนคร นัดผ่าตัด Anterior resection วันที่ 12 ต.ค. 2569',
+      companionName: 'นายประสิทธิ์ ศรีบุญมี (สามี)',
+      companionPhone: '082-999-4455',
+      clinicalNotes: 'ผลชิ้นเนื้อยืนยันมะเร็งลำไส้ใหญ่ (Adenocarcinoma) นัดผ่าตัด รพ.สกลนคร รอทีม อสม. ม.4 และหมอครอบครัวลงปักหมุดพิกัดบ้านเพื่อเยี่ยมติดตามต่อเนื่อง'
     }
   },
   {

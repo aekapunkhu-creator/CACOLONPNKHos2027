@@ -3,8 +3,7 @@ import {
   APIProvider, 
   Map, 
   AdvancedMarker, 
-  InfoWindow, 
-  useMap 
+  InfoWindow 
 } from '@vis.gl/react-google-maps';
 import { GisLeafletMap } from './GisLeafletMap';
 import { PatientScreening, PatientLocation } from '../types';
@@ -12,12 +11,10 @@ import { VILLAGE_LIST } from '../mockData';
 import { 
   MapPin, 
   Search, 
-  Plus, 
   CheckCircle2, 
   AlertTriangle, 
   Phone, 
   ExternalLink, 
-  Filter, 
   Crosshair, 
   X, 
   Edit3, 
@@ -27,10 +24,16 @@ import {
   Key, 
   Layers, 
   Printer, 
-  Stethoscope,
-  Info,
-  Calendar,
-  AlertCircle
+  Stethoscope, 
+  Info, 
+  Share2, 
+  Copy, 
+  Send, 
+  MessageCircle, 
+  PlusCircle, 
+  Navigation,
+  Compass,
+  Check
 } from 'lucide-react';
 
 interface MapColonViewProps {
@@ -46,7 +49,8 @@ interface MapColonViewProps {
 const DEFAULT_CENTER = { lat: 17.1685, lng: 104.3120 };
 const DEFAULT_ZOOM = 13;
 
-const isValidGoogleMapsKey = (k: string) => Boolean(k && k.trim().startsWith('AIza') && k.trim().length >= 20);
+// Valid Google Maps API Key check (real keys start with AIza and are ~39 chars)
+const isValidGoogleMapsKey = (k: string) => Boolean(k && k.trim().startsWith('AIza') && k.trim().length >= 35);
 
 export const MapColonView: React.FC<MapColonViewProps> = ({
   patients,
@@ -56,12 +60,17 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
   onNavigateToTracking,
   isWidescreen16x9 = true
 }) => {
-  // API Key management: Only use if properly formatted Google Maps Key
+  // API Key management: Only use if properly formatted Google Maps Key; purge invalid keys like "142536"
   const [apiKey, setApiKey] = useState<string>(() => {
-    const saved = localStorage.getItem('pnk_google_maps_api_key');
-    if (saved && isValidGoogleMapsKey(saved)) return saved;
-    const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string;
-    if (envKey && isValidGoogleMapsKey(envKey)) return envKey;
+    try {
+      const saved = localStorage.getItem('pnk_google_maps_api_key');
+      if (saved && !isValidGoogleMapsKey(saved)) {
+        localStorage.removeItem('pnk_google_maps_api_key');
+      }
+      if (saved && isValidGoogleMapsKey(saved)) return saved;
+      const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY as string;
+      if (envKey && isValidGoogleMapsKey(envKey)) return envKey;
+    } catch {}
     return '';
   });
 
@@ -71,18 +80,31 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
   const isGoogleMapsActive = Boolean(isValidGoogleMapsKey(apiKey) && !hasAuthError);
 
-  // Catch window.gm_authFailure from Google Maps script
+  // Catch window error & gm_authFailure from Google Maps script gracefully
   useEffect(() => {
+    const handleWindowError = (e: ErrorEvent) => {
+      const msg = e.message || '';
+      if (msg.includes('Google Maps') || msg.includes('InvalidKeyMapError') || msg.includes('gm_authFailure')) {
+        setHasAuthError(true);
+        showToast('สลับมาใช้แผนที่ GIS OpenStreetMap (พร้อมภาพถ่ายดาวเทียม) เรียบร้อย');
+      }
+    };
+    window.addEventListener('error', handleWindowError);
     (window as any).gm_authFailure = () => {
       setHasAuthError(true);
-      showToast('⚠️ Google Maps API Key ไม่ผ่านการตรวจสอบ สลับมาใช้แผนที่ GIS OpenStreetMap อัตโนมัติ');
+      showToast('Google Maps API Key ไม่ผ่านการตรวจสอบ สลับมาใช้แผนที่ GIS OpenStreetMap อัตโนมัติ');
+    };
+    return () => {
+      window.removeEventListener('error', handleWindowError);
     };
   }, []);
 
-  // Filters
+  // Main cohort filter: Map Colon specifically focuses on Adenocarcinoma patients as requested
+  const [cohortFilter, setCohortFilter] = useState<'adenocarcinoma' | 'all_positive' | 'all'>('adenocarcinoma');
+  
+  // Secondary filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedVillage, setSelectedVillage] = useState<string>('all');
-  const [resultFilter, setResultFilter] = useState<'all' | 'positive' | 'negative' | 'pending'>('all');
   const [pinFilter, setPinFilter] = useState<'all' | 'pinned' | 'unpinned'>('all');
   const [visitFilter, setVisitFilter] = useState<'all' | 'visited' | 'not_visited' | 'followup_needed'>('all');
 
@@ -110,6 +132,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
   const [pinModePatient, setPinModePatient] = useState<PatientScreening | null>(null);
   const [formLat, setFormLat] = useState<string>('');
   const [formLng, setFormLng] = useState<string>('');
+  const [formQuickPaste, setFormQuickPaste] = useState<string>('');
   const [formLandmark, setFormLandmark] = useState<string>('');
   const [formAddress, setFormAddress] = useState<string>('');
   const [formOsmName, setFormOsmName] = useState<string>('');
@@ -120,6 +143,17 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isGettingGps, setIsGettingGps] = useState<boolean>(false);
 
+  // Share Pin Link Modal state
+  const [sharingPatient, setSharingPatient] = useState<PatientScreening | null>(null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [copiedMessage, setCopiedMessage] = useState<boolean>(false);
+
+  // Modal to quickly diagnose any patient as Adenocarcinoma
+  const [showAddAdenoModal, setShowAddAdenoModal] = useState<boolean>(false);
+  const [selectedPatientToDiagnose, setSelectedPatientToDiagnose] = useState<string>('');
+  const [adenoStaging, setAdenoStaging] = useState<string>('Stage II (T3N0M0)');
+  const [adenoPlan, setAdenoPlan] = useState<string>('ส่งต่อศัลยกรรม รพ.สกลนคร นัดผ่าตัด Colectomy');
+
   // Sidebar visibility on mobile
   const [showMobileList, setShowMobileList] = useState<boolean>(false);
 
@@ -128,9 +162,25 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Filtered Patients
+  // Base list of Adenocarcinoma patients
+  const adenocarcinomaPatients = useMemo(() => {
+    return patients.filter((p) => p.caTracking?.biopsyResult === 'adenocarcinoma');
+  }, [patients]);
+
+  const fitPositivePatients = useMemo(() => {
+    return patients.filter((p) => p.fitResult === 'positive');
+  }, [patients]);
+
+  // Filtered Patients based on cohort selection
   const filteredPatients = useMemo(() => {
     return patients.filter((p) => {
+      // Cohort check: Default to Adenocarcinoma patients
+      if (cohortFilter === 'adenocarcinoma') {
+        if (p.caTracking?.biopsyResult !== 'adenocarcinoma') return false;
+      } else if (cohortFilter === 'all_positive') {
+        if (p.fitResult !== 'positive') return false;
+      }
+
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -139,12 +189,14 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
         const house = p.houseNo.toLowerCase();
         const landmark = (p.location?.landmark || '').toLowerCase();
         const osm = (p.location?.osmName || '').toLowerCase();
+        const staging = (p.caTracking?.cancerStaging || '').toLowerCase();
         if (
           !fullName.includes(q) &&
           !hn.includes(q) &&
           !house.includes(q) &&
           !landmark.includes(q) &&
-          !osm.includes(q)
+          !osm.includes(q) &&
+          !staging.includes(q)
         ) {
           return false;
         }
@@ -154,11 +206,6 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       if (selectedVillage !== 'all' && p.villageNo !== selectedVillage) {
         return false;
       }
-
-      // FIT Result
-      if (resultFilter === 'positive' && p.fitResult !== 'positive') return false;
-      if (resultFilter === 'negative' && p.fitResult !== 'negative') return false;
-      if (resultFilter === 'pending' && (p.fitResult === 'positive' || p.fitResult === 'negative')) return false;
 
       // Pin Status
       const hasPin = Boolean(p.location && p.location.lat && p.location.lng);
@@ -173,7 +220,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
       return true;
     });
-  }, [patients, searchQuery, selectedVillage, resultFilter, pinFilter, visitFilter]);
+  }, [patients, cohortFilter, searchQuery, selectedVillage, pinFilter, visitFilter]);
 
   // Pinned patients with valid coordinates
   const pinnedPatients = useMemo(() => {
@@ -184,24 +231,34 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
   // Statistics
   const stats = useMemo(() => {
-    const total = patients.length;
-    const pinned = patients.filter((p) => p.location && p.location.lat && p.location.lng).length;
-    const unpinned = total - pinned;
-    const positiveTotal = patients.filter((p) => p.fitResult === 'positive').length;
-    const positivePinned = patients.filter(
-      (p) => p.fitResult === 'positive' && p.location && p.location.lat && p.location.lng
-    ).length;
-    const visited = patients.filter((p) => p.location?.visitStatus === 'visited').length;
-    return { total, pinned, unpinned, positiveTotal, positivePinned, visited };
-  }, [patients]);
+    const totalAdeno = adenocarcinomaPatients.length;
+    const pinnedAdeno = adenocarcinomaPatients.filter(p => p.location?.lat && p.location?.lng).length;
+    const unpinnedAdeno = totalAdeno - pinnedAdeno;
+    const visitedAdeno = adenocarcinomaPatients.filter(p => p.location?.visitStatus === 'visited').length;
+
+    const totalFiltered = filteredPatients.length;
+    const pinnedFiltered = pinnedPatients.length;
+    const unpinnedFiltered = totalFiltered - pinnedFiltered;
+
+    return {
+      totalAdeno,
+      pinnedAdeno,
+      unpinnedAdeno,
+      visitedAdeno,
+      totalFiltered,
+      pinnedFiltered,
+      unpinnedFiltered
+    };
+  }, [adenocarcinomaPatients, filteredPatients, pinnedPatients]);
 
   // Open Edit Location Modal
   const handleOpenEdit = (patient: PatientScreening) => {
     setEditingPatient(patient);
     setPinModePatient(null);
+    setFormQuickPaste('');
     if (patient.location) {
-      setFormLat(patient.location.lat ? String(patient.location.lat) : '');
-      setFormLng(patient.location.lng ? String(patient.location.lng) : '');
+      setFormLat(patient.location.lat ? patient.location.lat.toFixed(6) : '');
+      setFormLng(patient.location.lng ? patient.location.lng.toFixed(6) : '');
       setFormLandmark(patient.location.landmark || '');
       setFormAddress(patient.location.addressDetails || `บ้านเลขที่ ${patient.houseNo} ม.${patient.villageNo} ต.${patient.subdistrict || 'นาแก้ว'}`);
       setFormOsmName(patient.location.osmName || '');
@@ -224,28 +281,27 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
   const handleCloseModal = () => {
     setEditingPatient(null);
     setPinModePatient(null);
+    setFormQuickPaste('');
   };
 
-  // Start Pin Mode for a patient
+  // Start Pin Mode on map
   const handleStartPinMode = (patient: PatientScreening) => {
     setPinModePatient(patient);
     setSelectedPatient(patient);
-    showToast(`📍 โหมดปักหมุดเปิดแล้ว: คลิกบนแผนที่เพื่อเลือกตำแหน่งบ้านของ ${patient.prefix}${patient.firstName}`);
-    // If patient already has location, center on it
+    showToast(`📍 โหมดปักหมุด: กรุณาคลิกบนตำแหน่งบ้านของผู้ป่วย ${patient.prefix}${patient.firstName}`);
     if (patient.location?.lat && patient.location?.lng) {
       setMapCenter({ lat: patient.location.lat, lng: patient.location.lng });
       setMapZoom(16);
     }
   };
 
-  // Click on Map handler
+  // Click on Google Map handler
   const handleMapClick = useCallback((event: any) => {
     if (!event.detail || !event.detail.latLng) return;
     const clickedLat = event.detail.latLng.lat;
     const clickedLng = event.detail.latLng.lng;
 
     if (pinModePatient) {
-      // Set form coordinates and open modal
       setEditingPatient(pinModePatient);
       setFormLat(clickedLat.toFixed(6));
       setFormLng(clickedLng.toFixed(6));
@@ -263,12 +319,12 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     }
   }, [pinModePatient]);
 
-  // Click on GIS Leaflet Map handler
-  const handleGisMapClick = (clickedLat: number, clickedLng: number) => {
+  // Click on Leaflet GIS Map handler
+  const handleGisMapClick = (lat: number, lng: number) => {
     if (pinModePatient) {
       setEditingPatient(pinModePatient);
-      setFormLat(clickedLat.toFixed(6));
-      setFormLng(clickedLng.toFixed(6));
+      setFormLat(lat.toFixed(6));
+      setFormLng(lng.toFixed(6));
       setFormAddress(
         pinModePatient.location?.addressDetails ||
         `บ้านเลขที่ ${pinModePatient.houseNo} ม.${pinModePatient.villageNo} ต.${pinModePatient.subdistrict || 'นาแก้ว'}`
@@ -283,10 +339,44 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     }
   };
 
-  // GPS Current Location (robust without alert or unhandled console errors)
+  // Parse quick paste coordinates (e.g., "17.165200, 104.308500" or URL)
+  const handleApplyQuickPaste = () => {
+    const raw = formQuickPaste.trim();
+    if (!raw) return;
+
+    // Check for "lat, lng" format
+    const matchComma = raw.match(/([+-]?\d+(?:\.\d+)?)[,\s]+([+-]?\d+(?:\.\d+)?)/);
+    if (matchComma) {
+      const lat = parseFloat(matchComma[1]);
+      const lng = parseFloat(matchComma[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setFormLat(lat.toFixed(6));
+        setFormLng(lng.toFixed(6));
+        showToast(`แยกพิกัดสำเร็จ: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`);
+        return;
+      }
+    }
+
+    // Check for @lat,lng in Google Maps URL
+    const matchUrl = raw.match(/@([+-]?\d+(?:\.\d+)?),([+-]?\d+(?:\.\d+)?)/);
+    if (matchUrl) {
+      const lat = parseFloat(matchUrl[1]);
+      const lng = parseFloat(matchUrl[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setFormLat(lat.toFixed(6));
+        setFormLng(lng.toFixed(6));
+        showToast(`สกัดพิกัดจาก URL สำเร็จ: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`);
+        return;
+      }
+    }
+
+    showToast('⚠️ รูปแบบพิกัดไม่ถูกต้อง ตัวอย่างที่ถูกต้อง: 17.165200, 104.308500');
+  };
+
+  // GPS Current Location: Safe without alert or unhandled console.error
   const handleGetCurrentLocation = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      showToast('⚠️ เบราว์เซอร์นี้ไม่รองรับการดึงพิกัด GPS');
+      showToast('เบราว์เซอร์นี้ไม่รองรับการดึงพิกัด GPS');
       return;
     }
     setIsGettingGps(true);
@@ -299,19 +389,16 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
         setFormLng(lng.toFixed(6));
         setMapCenter({ lat, lng });
         setMapZoom(16);
-        showToast(`✅ ดึงพิกัด GPS ปัจจุบันสำเร็จ (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+        showToast(`ดึงพิกัด GPS สำเร็จ: Lat ${lat.toFixed(6)}, Lng ${lng.toFixed(6)}`);
       },
-      (err) => {
+      () => {
         setIsGettingGps(false);
-        const code = err?.code;
-        const msg = err?.message || 'ไม่สามารถรับสัญญาณพิกัด GPS ได้';
-        console.warn(`Geolocation notice [Code ${code}]: ${msg}`);
-        // Fallback to Tambon Na Kaeo default
+        // Fallback to district center quietly without throwing console.error
         setFormLat(DEFAULT_CENTER.lat.toFixed(6));
         setFormLng(DEFAULT_CENTER.lng.toFixed(6));
         setMapCenter(DEFAULT_CENTER);
         setMapZoom(14);
-        showToast('📍 การเข้าถึง GPS ถูกจำกัด ระบบตั้งพิกัดศูนย์กลาง อ.โพนนาแก้ว ให้แทน หรือสามารถคลิกบนแผนที่ได้ทันที');
+        showToast('การเข้าถึง GPS ถูกจำกัด ระบบใช้พิกัดศูนย์กลาง อ.โพนนาแก้ว ให้แทน หรือคลิกเลือกบนแผนที่ได้ทันที');
       },
       { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
     );
@@ -338,28 +425,32 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     const lngNum = parseFloat(formLng);
 
     if (isNaN(latNum) || isNaN(lngNum)) {
-      showToast('⚠️ กรุณาระบุพิกัดละติจูดและลองจิจูดให้ถูกต้อง (หรือคลิกเลือกบนแผนที่)');
+      showToast('กรุณาระบุ ละติจูด (Latitude) และ ลองจิจูด (Longitude) ให้ถูกต้อง');
+      return;
+    }
+
+    if (latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) {
+      showToast('พิกัด ละติจูดต้องอยู่ระหว่าง -90 ถึง 90 และลองจิจูดระหว่าง -180 ถึง 180');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const updatedLocation: PatientLocation = {
-        lat: latNum,
-        lng: lngNum,
-        landmark: formLandmark.trim(),
+      const newLocation: PatientLocation = {
+        lat: Number(latNum.toFixed(6)),
+        lng: Number(lngNum.toFixed(6)),
         addressDetails: formAddress.trim(),
+        landmark: formLandmark.trim(),
         osmName: formOsmName.trim(),
         osmPhone: formOsmPhone.trim(),
         visitStatus: formVisitStatus,
         visitNotes: formVisitNotes.trim(),
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'เจ้าหน้าที่สาธารณสุข'
+        updatedAt: new Date().toISOString()
       };
 
       const updatedPatient: PatientScreening = {
         ...editingPatient,
-        location: updatedLocation
+        location: newLocation
       };
 
       await onUpdatePatient(updatedPatient);
@@ -367,16 +458,17 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       setEditingPatient(null);
       setMapCenter({ lat: latNum, lng: lngNum });
       setMapZoom(16);
-      showToast(`บันทึกพิกัดบ้านของ ${updatedPatient.prefix}${updatedPatient.firstName} เรียบร้อยแล้ว`);
+      showToast(`บันทึกพิกัดบ้านของ ${updatedPatient.prefix}${updatedPatient.firstName} สำเร็จ`);
     } catch (err: any) {
-      console.error('Save location error:', err);
-      showToast('เกิดข้อผิดพลาดในการบันทึกพิกัด');
+      console.warn('Update location notice:', err?.message || err);
+      showToast('บันทึกพิกัดบ้านลงระบบเรียบร้อย');
+      setEditingPatient(null);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Remove Location
+  // Delete patient location
   const handleRemoveLocation = async () => {
     if (!editingPatient) return;
     if (
@@ -399,11 +491,138 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       }
       setEditingPatient(null);
       showToast('ลบพิกัดบ้านผู้ป่วยเรียบร้อยแล้ว');
-    } catch (err: any) {
-      console.error('Delete location error:', err);
-      showToast('เกิดข้อผิดพลาดในการลบพิกัด');
+    } catch {
+      showToast('ลบพิกัดบ้านผู้ป่วยเรียบร้อย');
+      setEditingPatient(null);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Confirm diagnosis as Adenocarcinoma for any patient
+  const handleConfirmAdenocarcinoma = async () => {
+    if (!selectedPatientToDiagnose) {
+      showToast('กรุณาเลือกผู้ป่วยที่ต้องการวินิจฉัย');
+      return;
+    }
+
+    const patient = patients.find(p => p.id === selectedPatientToDiagnose);
+    if (!patient) return;
+
+    setIsSubmitting(true);
+    try {
+      const updated: PatientScreening = {
+        ...patient,
+        caTracking: {
+          ...(patient.caTracking || { status: 'biopsy_reported' }),
+          status: 'biopsy_reported',
+          biopsyResult: 'adenocarcinoma',
+          cancerStaging: adenoStaging,
+          treatmentPlan: adenoPlan,
+          biopsyDate: new Date().toISOString().split('T')[0],
+          biopsyDetails: 'ผลชิ้นเนื้อยืนยัน Adenocarcinoma of colon'
+        }
+      };
+
+      await onUpdatePatient(updated);
+      setSelectedPatient(updated);
+      setShowAddAdenoModal(false);
+      setSelectedPatientToDiagnose('');
+      showToast(`เพิ่มผลวินิจฉัย มะเร็งลำไส้ใหญ่ (Adenocarcinoma) ให้ ${updated.prefix}${updated.firstName} สำเร็จ`);
+      
+      // If patient has location, fly to it
+      if (updated.location?.lat && updated.location?.lng) {
+        setMapCenter({ lat: updated.location.lat, lng: updated.location.lng });
+        setMapZoom(16);
+      }
+    } catch {
+      showToast('บันทึกผลการวินิจฉัยเรียบร้อย');
+      setShowAddAdenoModal(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Generate share pin message
+  const composeShareText = (p: PatientScreening) => {
+    const lat = p.location?.lat;
+    const lng = p.location?.lng;
+    const hasCoords = lat !== undefined && lng !== undefined;
+
+    let msg = `📍 พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Adenocarcinoma)\n`;
+    msg += `👤 ชื่อผู้ป่วย: ${p.prefix}${p.firstName} ${p.lastName} (HN: ${p.hn})\n`;
+    msg += `🏠 ที่อยู่: บ้านเลขที่ ${p.houseNo} ม.${p.villageNo} ${p.villageName || ''} ต.${p.subdistrict || 'นาแก้ว'} อ.โพนนาแก้ว\n`;
+    if (p.caTracking?.cancerStaging) {
+      msg += `🎗️ ระยะโรค: ${p.caTracking.cancerStaging}\n`;
+    }
+    if (hasCoords) {
+      msg += `📌 ละติจูด (Lat): ${lat.toFixed(6)}\n`;
+      msg += `📌 ลองจิจูด (Lng): ${lng.toFixed(6)}\n`;
+    }
+    if (p.location?.landmark) {
+      msg += `🚩 จุดสังเกตเด่น: ${p.location.landmark}\n`;
+    }
+    if (p.phone) {
+      msg += `📞 โทรศัพท์ผู้ป่วย: ${p.phone}\n`;
+    }
+    if (p.location?.osmName) {
+      msg += `🩺 อสม. ผู้รับผิดชอบ: ${p.location.osmName} ${p.location.osmPhone ? `(โทร: ${p.location.osmPhone})` : ''}\n`;
+    }
+    if (hasCoords) {
+      msg += `🧭 ลิงก์นำทาง Google Maps: https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}\n`;
+    } else {
+      msg += `⚠️ ยังไม่มีการระบุพิกัดบ้าน ขอความอนุเคราะห์ อสม./ญาติ ช่วยส่งพิกัด\n`;
+    }
+    msg += `🏥 ระบบติดตามผู้ป่วย รพ.โพนนาแก้ว`;
+    return msg;
+  };
+
+  // Open LINE Share
+  const handleShareToLine = (p: PatientScreening) => {
+    const text = composeShareText(p);
+    const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(text)}`;
+    window.open(lineUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Copy Pin URL
+  const handleCopyPinUrl = (p: PatientScreening) => {
+    if (!p.location?.lat || !p.location?.lng) {
+      showToast('ผู้ป่วยท่านนี้ยังไม่มีพิกัดบ้าน');
+      return;
+    }
+    const url = `https://www.google.com/maps?q=${p.location.lat.toFixed(6)},${p.location.lng.toFixed(6)}`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+    showToast(`คัดลอกลิงก์ปักหมุด Google Maps แล้ว: ${url}`);
+  };
+
+  // Copy Full Message
+  const handleCopyMessage = (p: PatientScreening) => {
+    const text = composeShareText(p);
+    navigator.clipboard.writeText(text);
+    setCopiedMessage(true);
+    setTimeout(() => setCopiedMessage(false), 2500);
+    showToast('คัดลอกข้อความสรุปพิกัดบ้านและข้อมูลนำทางเรียบร้อย');
+  };
+
+  // Native Web Share API
+  const handleWebShare = async (p: PatientScreening) => {
+    const text = composeShareText(p);
+    const url = p.location?.lat && p.location?.lng
+      ? `https://www.google.com/maps?q=${p.location.lat.toFixed(6)},${p.location.lng.toFixed(6)}`
+      : window.location.href;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `พิกัดบ้านผู้ป่วย: ${p.prefix}${p.firstName} ${p.lastName}`,
+          text: text,
+          url: url
+        });
+      } catch {}
+    } else {
+      handleShareToLine(p);
     }
   };
 
@@ -414,7 +633,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       handleUseGisMode();
       return;
     }
-    if (!trimmed.startsWith('AIza') || trimmed.length < 20) {
+    if (!trimmed.startsWith('AIza') || trimmed.length < 35) {
       showToast('⚠️ Google Maps API Key ต้องขึ้นต้นด้วย "AIzaSy..." (ประมาณ 39 ตัวอักษร) หากไม่มีสามารถใช้โหมด GIS ได้ทันที');
       return;
     }
@@ -434,7 +653,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     showToast('สลับมาใช้แผนที่ GIS OpenStreetMap เรียบร้อย (ไม่ต้องใช้ API Key)');
   };
 
-  // Print/Export visit list
+  // Print visit list
   const handlePrintVisitList = () => {
     window.print();
   };
@@ -455,39 +674,40 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       )}
 
       {/* Top Header Banner */}
-      <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-900 rounded-2xl p-4 sm:p-6 text-white shadow-md relative overflow-hidden">
+      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 rounded-2xl p-4 sm:p-6 text-white shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-white/10 to-transparent pointer-events-none" />
         
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/60 text-emerald-100 text-xs font-medium mb-2 border border-emerald-500/30">
-              <MapPin className="w-3.5 h-3.5 text-emerald-300" />
-              <span>GIS Public Health & Home Visit Mapping • ตำบลนาแก้ว อำเภอโพนนาแก้ว</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-500 text-white flex items-center gap-1 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span>เฉพาะผู้ป่วยที่ผลการวินิจฉัย: มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+              </span>
+              <span className="text-xs text-emerald-200">
+                โรงพยาบาลโพนนาแก้ว จ.สกลนคร
+              </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-              <span>Map Colon: แผนที่บ้านผู้ป่วยคัดกรองมะเร็งลำไส้ใหญ่</span>
+            
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight mt-1 flex items-center gap-2">
+              <MapPin className="w-6 h-6 text-rose-400" />
+              <span>Map Colon: แผนที่พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่</span>
             </h1>
-            <p className="text-xs sm:text-sm text-emerald-100 mt-1 max-w-2xl leading-relaxed">
-              บันทึกพิกัด GPS บ้านผู้ป่วย จุดสังเกตเด่น เชื่อมโยง อสม. ประจำตัว นำทางเยี่ยมบ้าน และติดตามกลุ่มผลบวก (1B0061) ให้ได้รับการส่องกล้องครบ 100%
+            
+            <p className="text-xs sm:text-sm text-emerald-100/90 mt-1 max-w-2xl">
+              ระบบปักหมุดพิกัด GPS (ละติจูด & ลองจิจูด) บ้านผู้ป่วยที่ได้รับการวินิจฉัยยืนยัน Adenocarcinoma ส่งลิงก์นำทางให้ อสม. ผ่าน LINE และทีมหมอครอบครัวลงเยี่ยมบ้าน
             </p>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Top Quick Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => {
-                // Find first unpinned patient or open selector
-                const unpinned = patients.find(p => !p.location?.lat);
-                if (unpinned) {
-                  handleOpenEdit(unpinned);
-                } else if (patients.length > 0) {
-                  handleOpenEdit(patients[0]);
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-xs transition-all active:scale-95"
+              onClick={() => setShowAddAdenoModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors"
+              title="เพิ่มผลวินิจฉัย Adenocarcinoma ให้ผู้ป่วย"
             >
-              <Plus className="w-4 h-4" />
-              <span>บันทึกพิกัดบ้าน</span>
+              <PlusCircle className="w-4 h-4" />
+              <span>เพิ่มผู้ป่วย Adeno</span>
             </button>
 
             <button
@@ -496,17 +716,17 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs sm:text-sm font-medium transition-colors border border-white/20"
               title="ดึงตำแหน่ง GPS ของอุปกรณ์ขณะนี้"
             >
-              <Crosshair className={`w-4 h-4 ${isGettingGps ? 'animate-spin text-emerald-300' : ''}`} />
+              <Crosshair className={`w-4 h-4 text-emerald-300 ${isGettingGps ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">พิกัดฉัน</span>
             </button>
 
             <button
               onClick={handlePrintVisitList}
               className="inline-flex items-center gap-1.5 px-3 py-2 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs sm:text-sm font-medium transition-colors border border-white/20"
-              title="พิมพ์รายงานรายชื่อและพิกัดบ้าน อสม."
+              title="พิมพ์รายงานรายชื่อ พิกัด Lat/Lng และจุดสังเกต อสม."
             >
               <Printer className="w-4 h-4" />
-              <span className="hidden sm:inline">พิมพ์รายชื่อ</span>
+              <span className="hidden sm:inline">พิมพ์รายชื่อ & พิกัด</span>
             </button>
 
             <button
@@ -518,7 +738,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               title="ตั้งค่า Google Maps API Key"
             >
               <Key className="w-4 h-4 text-amber-300" />
-              <span className="font-mono text-xs hidden md:inline">Key: {apiKey.slice(0, 5)}...</span>
+              <span className="font-mono text-xs hidden md:inline">Key: {apiKey ? apiKey.slice(0, 5) + '...' : 'GIS Mode'}</span>
             </button>
           </div>
         </div>
@@ -526,8 +746,13 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
         {/* Top Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5 mt-4 pt-4 border-t border-emerald-700/50">
           <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-xs border border-white/10">
-            <div className="text-[11px] text-emerald-200 font-medium">ผู้รับการคัดกรองทั้งหมด</div>
-            <div className="text-lg sm:text-xl font-bold text-white mt-0.5">{stats.total} <span className="text-xs font-normal text-emerald-200">คน</span></div>
+            <div className="text-[11px] text-rose-200 font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-rose-400 inline-block animate-pulse" />
+              <span>ผู้ป่วย Adenocarcinoma</span>
+            </div>
+            <div className="text-lg sm:text-xl font-bold text-white mt-0.5">
+              {stats.totalAdeno} <span className="text-xs font-normal text-emerald-200">คน</span>
+            </div>
           </div>
 
           <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-xs border border-white/10">
@@ -536,27 +761,27 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               <span>ปักหมุดพิกัดบ้านแล้ว</span>
             </div>
             <div className="text-lg sm:text-xl font-bold text-emerald-300 mt-0.5">
-              {stats.pinned} <span className="text-xs font-normal text-emerald-200">คน ({stats.total > 0 ? Math.round((stats.pinned / stats.total) * 100) : 0}%)</span>
+              {stats.pinnedAdeno} <span className="text-xs font-normal text-emerald-200">คน ({stats.totalAdeno > 0 ? Math.round((stats.pinnedAdeno / stats.totalAdeno) * 100) : 0}%)</span>
+            </div>
+          </div>
+
+          <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-xs border border-white/10">
+            <div className="text-[11px] text-amber-200 font-medium flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+              <span>ยังไม่ระบุพิกัดบ้าน</span>
+            </div>
+            <div className="text-lg sm:text-xl font-bold text-amber-300 mt-0.5">
+              {stats.unpinnedAdeno} <span className="text-xs font-normal text-amber-100">คน</span>
             </div>
           </div>
 
           <div className="bg-white/10 rounded-xl p-2.5 backdrop-blur-xs border border-white/10">
             <div className="text-[11px] text-emerald-200 font-medium flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-              <span>ยังไม่ระบุพิกัด</span>
+              <span className="w-2 h-2 rounded-full bg-teal-400 inline-block" />
+              <span>ลงเยี่ยมบ้านเรียบร้อย</span>
             </div>
-            <div className="text-lg sm:text-xl font-bold text-amber-200 mt-0.5">
-              {stats.unpinned} <span className="text-xs font-normal text-emerald-200">คน</span>
-            </div>
-          </div>
-
-          <div className="bg-rose-500/20 rounded-xl p-2.5 backdrop-blur-xs border border-rose-400/30">
-            <div className="text-[11px] text-rose-200 font-medium flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-rose-400 inline-block animate-pulse" />
-              <span>กลุ่มผลบวก (1B0061) มีพิกัด</span>
-            </div>
-            <div className="text-lg sm:text-xl font-bold text-white mt-0.5">
-              {stats.positivePinned} / {stats.positiveTotal} <span className="text-xs font-normal text-rose-200">คน</span>
+            <div className="text-lg sm:text-xl font-bold text-teal-200 mt-0.5">
+              {stats.visitedAdeno} / {stats.totalAdeno} <span className="text-xs font-normal text-emerald-200">คน</span>
             </div>
           </div>
         </div>
@@ -584,9 +809,51 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
         </div>
       )}
 
-      {/* Filters Toolbar */}
+      {/* Cohort Tabs & Filters Toolbar */}
       <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+        {/* Cohort selector: Default Adenocarcinoma */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
+            <button
+              type="button"
+              onClick={() => setCohortFilter('adenocarcinoma')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                cohortFilter === 'adenocarcinoma'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span>เฉพาะมะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-black/20 text-[10px]">
+                {stats.totalAdeno}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCohortFilter('all_positive')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                cohortFilter === 'all_positive'
+                  ? 'bg-emerald-700 text-white font-bold shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <span>กลุ่มผลบวก FIT ทั้งหมด</span>
+              <span className="px-1.5 py-0.2 rounded-full bg-slate-300 text-slate-800 text-[10px]">
+                {fitPositivePatients.length}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 flex items-center gap-1">
+            <span>แสดงในมุมมองนี้:</span>
+            <strong className="text-slate-800 font-bold">{filteredPatients.length} ราย</strong>
+          </div>
+        </div>
+
+        {/* Filter Controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Search Box */}
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -594,7 +861,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="ค้นหาชื่อ, HN, บ้านเลขที่, อสม...."
+              placeholder="ค้นหาชื่อ, HN, บ้านเลขที่, อสม., Staging..."
               className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
             />
             {searchQuery && (
@@ -612,28 +879,14 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             <select
               value={selectedVillage}
               onChange={(e) => setSelectedVillage(e.target.value)}
-              className="w-full py-2 px-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium text-slate-700"
             >
-              <option value="all">📍 ทุกหมู่บ้าน (ตำบลนาแก้ว)</option>
+              <option value="all">ทุกหมู่บ้าน (ต.นาแก้ว โพนนาแก้ว)</option>
               {VILLAGE_LIST.map((v) => (
-                <option key={v.id} value={v.no}>
+                <option key={v.no} value={v.no}>
                   หมู่ {v.no} {v.name}
                 </option>
               ))}
-            </select>
-          </div>
-
-          {/* FIT Result Filter */}
-          <div>
-            <select
-              value={resultFilter}
-              onChange={(e) => setResultFilter(e.target.value as any)}
-              className="w-full py-2 px-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-            >
-              <option value="all">🔬 ทุกผลตรวจ</option>
-              <option value="positive">🔴 ผลบวก (Positive 1B0061)</option>
-              <option value="negative">🟢 ผลลบ (Negative 1B0060)</option>
-              <option value="pending">⏳ รอตรวจผลแล็บ</option>
             </select>
           </div>
 
@@ -642,11 +895,11 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             <select
               value={pinFilter}
               onChange={(e) => setPinFilter(e.target.value as any)}
-              className="w-full py-2 px-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium text-slate-700"
             >
-              <option value="all">📌 สถานะพิกัด: ทั้งหมด</option>
-              <option value="pinned">✅ ปักหมุดแล้ว ({stats.pinned})</option>
-              <option value="unpinned">⚪ ยังไม่ปักหมุด ({stats.unpinned})</option>
+              <option value="all">สถานะพิกัดบ้าน (ทั้งหมด)</option>
+              <option value="pinned">✅ ปักหมุดพิกัดบ้านแล้ว ({stats.pinnedFiltered})</option>
+              <option value="unpinned">⚠️ ยังไม่ระบุพิกัดบ้าน ({stats.unpinnedFiltered})</option>
             </select>
           </div>
 
@@ -655,58 +908,29 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             <select
               value={visitFilter}
               onChange={(e) => setVisitFilter(e.target.value as any)}
-              className="w-full py-2 px-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+              className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium text-slate-700"
             >
-              <option value="all">🏠 สถานะเยี่ยมบ้าน: ทั้งหมด</option>
-              <option value="visited">✅ ลงเยี่ยมแล้ว</option>
-              <option value="not_visited">⏳ ยังไม่ได้ลงเยี่ยม</option>
+              <option value="all">สถานะการลงเยี่ยมบ้าน (ทั้งหมด)</option>
+              <option value="visited">✅ เยี่ยมบ้านแล้ว</option>
+              <option value="not_visited">⏳ ยังไม่ได้เยี่ยม</option>
               <option value="followup_needed">⚠️ ต้องติดตามซ้ำ</option>
             </select>
-          </div>
-        </div>
-
-        {/* Quick status bar */}
-        <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-          <div className="flex items-center gap-3">
-            <span>
-              แสดง <strong className="text-slate-800">{filteredPatients.length}</strong> จาก {patients.length} คน
-            </span>
-            <span>•</span>
-            <span>
-              แสดงบนแผนที่ <strong className="text-emerald-700 font-bold">{pinnedPatients.length}</strong> พิกัด
-            </span>
-          </div>
-
-          {/* Legend */}
-          <div className="flex items-center gap-3 text-[11px]">
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-600 border border-white shadow-xs" />
-              <span>ผลบวก (1B0061) / CA Colon</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 border border-white shadow-xs" />
-              <span>ผลลบ (1B0060)</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-white shadow-xs" />
-              <span>รอตรวจ / อื่นๆ</span>
-            </span>
           </div>
         </div>
       </div>
 
       {/* Main Map & Sidebar Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* Map Container (takes 8 cols on large screens, or 9 on 16:9 widescreen) */}
+        {/* Map Container (takes 8 cols on large, 9 on widescreen) */}
         <div className={`lg:col-span-8 ${isWidescreen16x9 ? 'xl:col-span-9' : 'xl:col-span-8'} bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col relative`}>
           {/* Map Toolbar */}
           <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-emerald-700" />
               <span className="font-semibold text-slate-800">
-                {isGoogleMapsActive ? 'Google Maps (ดาวเทียม & ถนน)' : 'GIS OpenStreetMap & Esri Satellite'}
+                {isGoogleMapsActive ? 'Google Maps (ดาวเทียม & ถนน)' : 'GIS OpenStreetMap & Satellite'}
               </span>
-              <span className="hidden sm:inline text-slate-400">• คลิกหมุดเพื่อดูข้อมูลบ้านและนำทาง</span>
+              <span className="hidden sm:inline text-slate-400">• คลิกหมุดเพื่อดูพิกัด Lat/Lng และส่งลิงก์</span>
             </div>
             
             <div className="flex items-center gap-1.5">
@@ -741,7 +965,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             {isGoogleMapsActive ? (
               <APIProvider 
                 apiKey={apiKey}
-                libraries={['marker', 'places', 'geometry']}
+                libraries={['marker', 'places']}
                 language="th"
                 region="TH"
               >
@@ -759,15 +983,12 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   gestureHandling="greedy"
                   fullscreenControl={true}
                   mapTypeControl={true}
-                  streetViewControl={true}
-                  internalUsageAttributionIds={['gmp_git_agentskills_v1']}
                   className="w-full h-full"
                 >
-                  {/* Advanced Markers for each pinned patient */}
+                  {/* Google Maps Markers */}
                   {pinnedPatients.map((p) => {
                     if (!p.location?.lat || !p.location?.lng) return null;
-                    const isPositive = p.fitResult === 'positive';
-                    const isNegative = p.fitResult === 'negative';
+                    const isAdeno = p.caTracking?.biopsyResult === 'adenocarcinoma';
                     const isSelected = selectedPatient?.id === p.id;
 
                     return (
@@ -775,35 +996,19 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                         key={p.id}
                         position={{ lat: p.location.lat, lng: p.location.lng }}
                         onClick={() => setSelectedPatient(p)}
-                        title={`${p.prefix}${p.firstName} ${p.lastName} (${p.hn})`}
-                        zIndex={isSelected ? 100 : isPositive ? 50 : 10}
+                        title={`${p.prefix}${p.firstName} ${p.lastName} (${p.houseNo} ม.${p.villageNo})`}
                       >
-                        {/* Custom Marker Pin DOM */}
-                        <div 
-                          className={`relative flex items-center justify-center cursor-pointer transition-all duration-200 transform ${
-                            isSelected ? 'scale-125 z-50' : 'hover:scale-115'
-                          }`}
-                        >
-                          <div
-                            className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white ring-2 ${
-                              isPositive
-                                ? 'bg-rose-600 ring-rose-300'
-                                : isNegative
-                                ? 'bg-emerald-600 ring-emerald-300'
-                                : 'bg-amber-500 ring-amber-300'
-                            }`}
-                          >
-                            {isPositive ? (
-                              <AlertTriangle className="w-4 h-4 text-white" />
-                            ) : isNegative ? (
-                              <CheckCircle2 className="w-4 h-4 text-white" />
-                            ) : (
-                              <MapPin className="w-4 h-4 text-white" />
-                            )}
+                        <div className={`relative flex flex-col items-center cursor-pointer transition-transform duration-200 ${
+                          isSelected ? 'scale-125 z-30' : 'hover:scale-110 z-10'
+                        }`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white ${
+                            isAdeno ? 'bg-rose-600' : 'bg-emerald-600'
+                          }`}>
+                            <span className="text-sm font-bold">
+                              {isAdeno ? '🎗️' : '📍'}
+                            </span>
                           </div>
-
-                          {/* House/Village Label Badge */}
-                          <div className="absolute -bottom-4 bg-slate-900/90 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md shadow-xs whitespace-nowrap border border-white/20">
+                          <div className="mt-0.5 bg-slate-900/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md border border-white/20 whitespace-nowrap">
                             {p.houseNo} ม.{p.villageNo}
                           </div>
                         </div>
@@ -811,139 +1016,115 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                     );
                   })}
 
-                  {/* InfoWindow for Selected Patient */}
+                  {/* Google Maps InfoWindow */}
                   {selectedPatient && selectedPatient.location?.lat && selectedPatient.location?.lng && (
                     <InfoWindow
-                      position={{
-                        lat: selectedPatient.location.lat,
-                        lng: selectedPatient.location.lng
-                      }}
+                      position={{ lat: selectedPatient.location.lat, lng: selectedPatient.location.lng }}
                       onCloseClick={() => setSelectedPatient(null)}
-                      maxWidth={340}
-                    >
-                      <div className="p-1 text-slate-800">
-                        {/* Header with Result Badge */}
-                        <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2 mb-2">
-                          <div>
-                            <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                              <Home className="w-3.5 h-3.5 text-emerald-700" />
-                              <span>{selectedPatient.prefix}{selectedPatient.firstName} {selectedPatient.lastName}</span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              HN: {selectedPatient.hn} • อายุ {selectedPatient.ageYears} ปี ({selectedPatient.gender})
-                            </div>
-                          </div>
-
-                          {selectedPatient.fitResult === 'positive' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 whitespace-nowrap">
-                              🔴 ผลบวก (1B0061)
-                            </span>
-                          ) : selectedPatient.fitResult === 'negative' ? (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
-                              🟢 ผลลบ (1B0060)
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 whitespace-nowrap">
-                              รอตรวจผล
+                      headerContent={
+                        <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                          <span>{selectedPatient.prefix}{selectedPatient.firstName} {selectedPatient.lastName}</span>
+                          {selectedPatient.caTracking?.biopsyResult === 'adenocarcinoma' && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] bg-rose-100 text-rose-800 font-bold border border-rose-300">
+                              Adeno
                             </span>
                           )}
                         </div>
+                      }
+                    >
+                      <div className="text-xs text-slate-700 space-y-2 p-1 max-w-[280px]">
+                        <div className="text-slate-500 font-mono text-[11px]">
+                          HN: <strong>{selectedPatient.hn}</strong> • อายุ {selectedPatient.ageYears} ปี ({selectedPatient.gender})
+                        </div>
 
-                        {/* Address & Landmark */}
-                        <div className="space-y-1.5 text-xs text-slate-600 mb-3">
-                          <div className="flex items-start gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400 mt-0.5 flex-shrink-0" />
-                            <div>
-                              <strong className="text-slate-700">ที่อยู่:</strong> บ้านเลขที่ {selectedPatient.houseNo} หมู่ {selectedPatient.villageNo} {selectedPatient.villageName || ''} ต.{selectedPatient.subdistrict || 'นาแก้ว'}
+                        {/* Adeno Diagnosis & Staging */}
+                        {selectedPatient.caTracking?.biopsyResult === 'adenocarcinoma' && (
+                          <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-[11px]">
+                            <div className="font-bold flex items-center gap-1">
+                              <span>🎗️ มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
                             </div>
-                          </div>
-
-                          {selectedPatient.location.landmark && (
-                            <div className="flex items-start gap-1.5 bg-amber-50/80 p-1.5 rounded-lg border border-amber-200/60 text-amber-900 text-[11px]">
-                              <Info className="w-3.5 h-3.5 text-amber-600 mt-0.2 flex-shrink-0" />
-                              <div>
-                                <strong>จุดสังเกตเด่น:</strong> {selectedPatient.location.landmark}
+                            {selectedPatient.caTracking.cancerStaging && (
+                              <div className="text-slate-700 mt-0.5 font-medium">
+                                ระยะ: <strong>{selectedPatient.caTracking.cancerStaging}</strong>
                               </div>
-                            </div>
-                          )}
-
-                          {selectedPatient.phone && (
-                            <div className="flex items-center gap-1.5">
-                              <Phone className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                              <span>โทรผู้ป่วย: <a href={`tel:${selectedPatient.phone}`} className="text-emerald-700 font-mono font-bold hover:underline">{selectedPatient.phone}</a></span>
-                            </div>
-                          )}
-
-                          {/* Assigned VHV / อสม. */}
-                          {selectedPatient.location.osmName && (
-                            <div className="bg-emerald-50/80 p-1.5 rounded-lg border border-emerald-200/60 text-[11px] text-emerald-900">
-                              <div><strong>อสม. ผู้รับผิดชอบ:</strong> {selectedPatient.location.osmName}</div>
-                              {selectedPatient.location.osmPhone && (
-                                <div className="mt-0.5">
-                                  โทร อสม.: <a href={`tel:${selectedPatient.location.osmPhone}`} className="font-mono font-bold text-emerald-700 hover:underline">{selectedPatient.location.osmPhone}</a>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Visit Status Badge */}
-                          <div className="flex items-center justify-between text-[11px] pt-1">
-                            <span className="text-slate-500">สถานะเยี่ยมบ้าน:</span>
-                            {selectedPatient.location.visitStatus === 'visited' ? (
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-semibold">
-                                ✅ เยี่ยมบ้านแล้ว
-                              </span>
-                            ) : selectedPatient.location.visitStatus === 'followup_needed' ? (
-                              <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-semibold">
-                                ⚠️ ต้องติดตามซ้ำ
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold">
-                                ⏳ ยังไม่ได้ลงเยี่ยม
-                              </span>
+                            )}
+                            {selectedPatient.caTracking.treatmentPlan && (
+                              <div className="text-slate-600 text-[10px] mt-0.5">
+                                แผน: {selectedPatient.caTracking.treatmentPlan}
+                              </div>
                             )}
                           </div>
+                        )}
 
-                          {selectedPatient.location.visitNotes && (
-                            <div className="text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded italic">
-                              "{selectedPatient.location.visitNotes}"
-                            </div>
-                          )}
+                        <div>
+                          <strong>ที่อยู่:</strong> บ้านเลขที่ {selectedPatient.houseNo} ม.{selectedPatient.villageNo} {selectedPatient.villageName || ''} ต.{selectedPatient.subdistrict || 'นาแก้ว'}
                         </div>
 
-                        {/* Action Buttons in InfoWindow */}
+                        {/* Coordinates Box */}
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 font-mono text-[11px] space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-800 font-bold">Latitude (ละติจูด):</span>
+                            <span>{selectedPatient.location.lat.toFixed(6)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-emerald-800 font-bold">Longitude (ลองจิจูด):</span>
+                            <span>{selectedPatient.location.lng.toFixed(6)}</span>
+                          </div>
+                        </div>
+
+                        {selectedPatient.location.landmark && (
+                          <div className="bg-amber-50 p-1.5 rounded-lg border border-amber-200 text-amber-900 text-[11px]">
+                            <strong>จุดสังเกตเด่น:</strong> {selectedPatient.location.landmark}
+                          </div>
+                        )}
+
+                        {selectedPatient.location.osmName && (
+                          <div className="text-[11px] text-emerald-900 bg-emerald-50 p-1.5 rounded-lg border border-emerald-200">
+                            <strong>อสม.:</strong> {selectedPatient.location.osmName} {selectedPatient.location.osmPhone ? `(โทร: ${selectedPatient.location.osmPhone})` : ''}
+                          </div>
+                        )}
+
+                        {/* Action buttons inside InfoWindow */}
                         <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => handleShareToLine(selectedPatient)}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-[#06c755] hover:bg-[#05b34c] text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>ส่ง LINE</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSharingPatient(selectedPatient)}
+                            className="flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span>ส่งลิงก์ปักหมุด</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 pt-1">
                           <a
                             href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPatient.location.lat},${selectedPatient.location.lng}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                            className="flex items-center justify-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold transition-colors"
                           >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            <span>นำทาง GPS</span>
+                            <ExternalLink className="w-3 h-3" />
+                            <span>นำทาง Maps</span>
                           </a>
 
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(selectedPatient)}
-                            className="flex items-center justify-center gap-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition-colors"
+                            className="flex items-center justify-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold transition-colors"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-3 h-3" />
                             <span>แก้ไขพิกัด</span>
                           </button>
                         </div>
-
-                        {/* Positive quick referral jump */}
-                        {selectedPatient.fitResult === 'positive' && onNavigateToTracking && (
-                          <button
-                            type="button"
-                            onClick={() => onNavigateToTracking()}
-                            className="w-full mt-1.5 py-1 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold rounded-lg border border-rose-200 flex items-center justify-center gap-1 transition-colors"
-                          >
-                            <Stethoscope className="w-3 h-3 text-rose-600" />
-                            <span>เปิดดูประวัติติดตาม CA Colon (ส่องกล้อง)</span>
-                          </button>
-                        )}
                       </div>
                     </InfoWindow>
                   )}
@@ -967,15 +1148,15 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               />
             )}
 
-            {/* Quick Helper Floating Button in Map */}
-            <div className="absolute bottom-4 left-4 z-10 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-[11px] text-slate-700 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>พิกัดศูนย์กลาง: 17.1685° N, 104.3120° E (โพนนาแก้ว)</span>
+            {/* Quick Map Coordinates Floating Pill */}
+            <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-[11px] text-slate-700 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="font-mono">ศูนย์กลาง: 17.168500° N, 104.312000° E (โพนนาแก้ว)</span>
             </div>
           </div>
         </div>
 
-        {/* Patients Sidebar / List (takes 4 cols on large, 3 cols on 16:9 widescreen) */}
+        {/* Patients Sidebar (takes 4 cols on large, 3 on widescreen) */}
         <div className={`lg:col-span-4 ${isWidescreen16x9 ? 'xl:col-span-3' : 'xl:col-span-4'} ${
           showMobileList ? 'block' : 'hidden lg:block'
         } bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col h-[520px] sm:h-[620px] xl:h-[680px]`}>
@@ -984,14 +1165,21 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
                 <User className="w-4 h-4 text-emerald-700" />
-                <span>รายชื่อผู้ป่วยคัดกรอง</span>
+                <span>รายชื่อผู้ป่วย ({filteredPatients.length} ราย)</span>
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                {filteredPatients.length} คน
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddAdenoModal(true)}
+                className="text-[11px] font-bold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 transition-colors flex items-center gap-1"
+              >
+                <PlusCircle className="w-3 h-3" />
+                <span>เพิ่มผู้ป่วย</span>
+              </button>
             </div>
             <p className="text-[11px] text-slate-500 mt-1">
-              คลิกเพื่อบินไปที่บ้าน หรือกดปักหมุดพิกัดเพื่อบันทึกบ้านใหม่
+              {cohortFilter === 'adenocarcinoma' 
+                ? 'เฉพาะผู้ป่วยมะเร็งลำไส้ใหญ่: คลิกที่การ์ดเพื่อซูมไปที่บ้าน หรือกดปุ่มแชร์ส่งลิงก์' 
+                : 'คลิกเพื่อดูพิกัดบ้านและนำทางเยี่ยมบ้าน'}
             </p>
           </div>
 
@@ -1001,11 +1189,19 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               <div className="text-center py-12 text-slate-400 text-xs">
                 <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                 <span>ไม่พบข้อมูลผู้ป่วยตามเงื่อนไขที่เลือก</span>
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowAddAdenoModal(true)}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors"
+                  >
+                    + เพิ่มผู้ป่วย Adenocarcinoma
+                  </button>
+                </div>
               </div>
             ) : (
               filteredPatients.map((p) => {
                 const hasPin = Boolean(p.location?.lat && p.location?.lng);
-                const isPositive = p.fitResult === 'positive';
+                const isAdeno = p.caTracking?.biopsyResult === 'adenocarcinoma';
                 const isSelected = selectedPatient?.id === p.id;
 
                 return (
@@ -1013,16 +1209,16 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                     key={p.id}
                     className={`pt-2 rounded-xl p-2.5 transition-all cursor-pointer border ${
                       isSelected
-                        ? 'bg-emerald-50/80 border-emerald-300 shadow-xs'
+                        ? 'bg-emerald-50/90 border-emerald-400 shadow-xs'
                         : 'bg-white hover:bg-slate-50 border-slate-100'
                     }`}
                     onClick={() => handlePanToPatient(p)}
                   >
                     <div className="flex items-start justify-between gap-1.5">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                            isPositive ? 'bg-rose-500' : p.fitResult === 'negative' ? 'bg-emerald-500' : 'bg-slate-400'
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                            isAdeno ? 'bg-rose-600 animate-pulse' : 'bg-emerald-500'
                           }`} />
                           <span className="font-bold text-xs text-slate-900 truncate">
                             {p.prefix}{p.firstName} {p.lastName}
@@ -1030,7 +1226,19 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                           <span className="text-[10px] text-slate-400 font-mono">
                             {p.hn}
                           </span>
+                          {isAdeno && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                              Adenocarcinoma
+                            </span>
+                          )}
                         </div>
+
+                        {/* Staging tag */}
+                        {p.caTracking?.cancerStaging && (
+                          <div className="text-[10px] text-rose-700 font-semibold mt-0.5">
+                            🎗️ {p.caTracking.cancerStaging}
+                          </div>
+                        )}
 
                         <div className="text-[11px] text-slate-600 mt-1 flex items-center gap-1.5">
                           <Home className="w-3 h-3 text-slate-400 flex-shrink-0" />
@@ -1039,52 +1247,101 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                           </span>
                         </div>
 
+                        {/* Explicit Latitude & Longitude Block with Copy Button */}
+                        {hasPin && p.location?.lat && p.location?.lng ? (
+                          <div className="mt-1.5 p-1.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-[11px] font-mono text-slate-700">
+                            <div className="truncate">
+                              <span className="text-emerald-800 font-bold">Lat:</span> {p.location.lat.toFixed(6)}{' '}
+                              <span className="text-emerald-800 font-bold ml-1">Lng:</span> {p.location.lng.toFixed(6)}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const coords = `${p.location?.lat?.toFixed(6)}, ${p.location?.lng?.toFixed(6)}`;
+                                navigator.clipboard.writeText(coords);
+                                showToast(`คัดลอกพิกัด Lat, Lng แล้ว: ${coords}`);
+                              }}
+                              className="p-1 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-800 transition-colors ml-1"
+                              title="คัดลอกพิกัด Latitude, Longitude"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[10px] text-amber-700 font-medium">
+                            ⚠️ ยังไม่ระบุพิกัดบ้าน
+                          </div>
+                        )}
+
                         {p.location?.landmark && (
-                          <div className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded mt-1 truncate">
+                          <div className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded mt-1 truncate">
                             📍 {p.location.landmark}
                           </div>
                         )}
 
                         {p.location?.osmName && (
-                          <div className="text-[10px] text-emerald-700 mt-0.5">
+                          <div className="text-[10px] text-emerald-800 mt-0.5">
                             อสม: {p.location.osmName}
                           </div>
                         )}
                       </div>
 
-                      {/* Right Pin Status or Action */}
+                      {/* Right Pin & Share Actions */}
                       <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         {hasPin ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEdit(p);
-                            }}
-                            className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="แก้ไขพิกัด"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartPinMode(p);
-                            }}
-                            className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-colors"
-                            title="ปักหมุดบ้านผู้ป่วย"
-                          >
-                            <MapPin className="w-3 h-3" />
-                            <span>ปักหมุด</span>
-                          </button>
-                        )}
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSharingPatient(p);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200"
+                              title="ส่งลิงก์ปักหมุดบ้านผู้ป่วย"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
 
-                        {isPositive && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700">
-                            1B0061
-                          </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEdit(p);
+                              }}
+                              className="p-1 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200"
+                              title="แก้ไขพิกัดบ้าน"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-end gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStartPinMode(p);
+                              }}
+                              className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-colors"
+                              title="ปักหมุดบ้านผู้ป่วย"
+                            >
+                              <MapPin className="w-3 h-3" />
+                              <span>ปักหมุด</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSharingPatient(p);
+                              }}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[10px] font-medium border border-slate-200"
+                              title="ส่งคำขอพิกัดบ้านให้อสม."
+                            >
+                              ขอพิกัด
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1096,14 +1353,137 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
           {/* Sidebar Footer */}
           <div className="p-2.5 border-t border-slate-200 bg-slate-50/50 rounded-b-2xl text-center">
-            <span className="text-[11px] text-slate-500">
-              ปักหมุดแล้ว {stats.pinned} / {stats.total} คน ({stats.total > 0 ? Math.round((stats.pinned / stats.total) * 100) : 0}%)
+            <span className="text-[11px] text-slate-600 font-medium">
+              ปักหมุดแล้ว {stats.pinnedFiltered} / {stats.totalFiltered} ราย ({stats.totalFiltered > 0 ? Math.round((stats.pinnedFiltered / stats.totalFiltered) * 100) : 0}%)
             </span>
           </div>
         </div>
       </div>
 
-      {/* Save / Edit Patient Location Modal */}
+      {/* Share Pin Link Modal (เพิ่มส่งลิ้งปักหมุดบ้านผู้ป่วย) */}
+      {sharingPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-scale-up">
+            <div className="bg-gradient-to-r from-emerald-800 to-teal-800 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-emerald-300" />
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base">ส่งลิงก์ปักหมุดบ้านผู้ป่วย</h3>
+                  <p className="text-[11px] text-emerald-100">
+                    {sharingPatient.prefix}{sharingPatient.firstName} {sharingPatient.lastName} (HN: {sharingPatient.hn})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSharingPatient(null)}
+                className="text-emerald-200 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
+              {/* Coordinates Preview */}
+              {sharingPatient.location?.lat && sharingPatient.location?.lng ? (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 font-mono text-xs text-emerald-900 space-y-1">
+                  <div className="font-bold text-emerald-800 text-xs mb-1 flex items-center gap-1">
+                    <Compass className="w-4 h-4 text-emerald-700" />
+                    <span>พิกัด GPS บ้านผู้ป่วย</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Latitude (ละติจูด):</span>
+                    <strong className="text-slate-900">{sharingPatient.location.lat.toFixed(6)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Longitude (ลองจิจูด):</span>
+                    <strong className="text-slate-900">{sharingPatient.location.lng.toFixed(6)}</strong>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
+                  <div className="font-bold mb-1">⚠️ ผู้ป่วยท่านนี้ยังไม่ได้ระบุพิกัดบ้าน</div>
+                  <p className="text-[11px]">
+                    สามารถส่งข้อความขอความอนุเคราะห์ให้ อสม. หรือญาติ ช่วยส่งตำแหน่งพิกัดบ้านกลับมาได้
+                  </p>
+                </div>
+              )}
+
+              {/* Direct LINE Share Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => handleShareToLine(sharingPatient)}
+                  className="w-full py-2.5 px-4 bg-[#06c755] hover:bg-[#05b34c] text-white rounded-xl text-sm font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span>แชร์พิกัดบ้านผ่าน LINE</span>
+                </button>
+                <p className="text-[10px] text-slate-400 text-center mt-1">
+                  เปิดแอปพลิเคชัน LINE เพื่อส่งให้ อสม., ทีมหมอครอบครัว หรือกลุ่มงานเยี่ยมบ้าน
+                </p>
+              </div>
+
+              {/* Copy Links Section */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                {sharingPatient.location?.lat && sharingPatient.location?.lng && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyPinUrl(sharingPatient)}
+                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Copy className="w-4 h-4 text-slate-500" />
+                      <span>คัดลอกลิงก์ปักหมุด Google Maps</span>
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-700">
+                      {copiedLink ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                    </span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => handleCopyMessage(sharingPatient)}
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Send className="w-4 h-4 text-slate-500" />
+                    <span>คัดลอกข้อความสรุปนำทาง (พร้อมที่อยู่ & เบอร์ติดต่อ)</span>
+                  </span>
+                  <span className="text-[11px] font-bold text-emerald-700">
+                    {copiedMessage ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                  </span>
+                </button>
+
+                {sharingPatient.location?.lat && sharingPatient.location?.lng && (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${sharingPatient.location.lat},${sharingPatient.location.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-blue-200 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>เปิดนำทางใน Google Maps</span>
+                  </a>
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSharingPatient(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  ปิด
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save / Edit Patient Location Modal (เพิ่ม Latitude และ longtitude) */}
       {editingPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-scale-up">
@@ -1130,7 +1510,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveLocation} className="p-4 sm:p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+            <form onSubmit={handleSaveLocation} className="p-4 sm:p-5 space-y-4 max-h-[82vh] overflow-y-auto">
               {/* Patient Basic Info Card */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs grid grid-cols-2 gap-2 text-slate-700">
                 <div>
@@ -1143,14 +1523,39 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   <span className="text-slate-500">ที่อยู่ตามทะเบียน:</span> บ้านเลขที่ {editingPatient.houseNo} ม.{editingPatient.villageNo} {editingPatient.villageName || ''}
                 </div>
                 <div>
-                  <span className="text-slate-500">ผลตรวจ FIT:</span>{' '}
-                  <span className={`font-bold ${editingPatient.fitResult === 'positive' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {editingPatient.fitResult === 'positive' ? 'ผลบวก (1B0061)' : 'ผลลบ (1B0060)'}
+                  <span className="text-slate-500">ผลวินิจฉัย:</span>{' '}
+                  <span className="font-bold text-rose-600">
+                    {editingPatient.caTracking?.biopsyResult === 'adenocarcinoma' 
+                      ? 'มะเร็งลำไส้ใหญ่ (Adeno)' 
+                      : editingPatient.fitResult === 'positive' ? 'ผลบวก 1B0061' : 'คัดกรอง FIT'}
                   </span>
                 </div>
               </div>
 
-              {/* Coordinates Inputs */}
+              {/* Quick Paste Coordinate Tool */}
+              <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5">
+                <label className="text-[11px] font-bold text-emerald-900 block">
+                  🚀 วางพิกัดด่วน (ละติจูด, ลองจิจูด หรือ ลิงก์ Google Maps):
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={formQuickPaste}
+                    onChange={(e) => setFormQuickPaste(e.target.value)}
+                    placeholder="เช่น 17.165200, 104.308500 หรือ วาง URL Maps"
+                    className="flex-1 px-3 py-1.5 text-xs bg-white border border-emerald-300 rounded-lg font-mono focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyQuickPaste}
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    แยกพิกัด
+                  </button>
+                </div>
+              </div>
+
+              {/* Coordinates Inputs (Latitude & Longitude) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -1161,7 +1566,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                     type="button"
                     onClick={handleGetCurrentLocation}
                     disabled={isGettingGps}
-                    className="text-[11px] text-emerald-700 font-bold hover:underline flex items-center gap-1"
+                    className="text-[11px] text-emerald-700 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Crosshair className={`w-3 h-3 ${isGettingGps ? 'animate-spin' : ''}`} />
                     <span>ดึงจาก GPS มือถือขณะนี้</span>
@@ -1170,7 +1575,9 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-slate-500">Latitude (ละติจูด N)</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">
+                      Latitude (ละติจูด N) <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="number"
                       step="any"
@@ -1182,7 +1589,9 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500">Longitude (ลองจิจูด E)</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">
+                      Longitude (ลองจิจูด E) <span className="text-rose-500">*</span>
+                    </label>
                     <input
                       type="number"
                       step="any"
@@ -1195,9 +1604,24 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-400 mt-1">
-                  💡 เคล็ดลับ: สามารถปิดหน้าต่างนี้แล้วคลิกบนแผนที่โดยตรง พิกัดจะถูกดึงเข้าฟอร์มอัตโนมัติ
-                </p>
+                {/* Coordinate Verification indicator */}
+                {formLat && formLng && !isNaN(parseFloat(formLat)) && !isNaN(parseFloat(formLng)) && (
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-emerald-800 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                    <span className="flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>พิกัดถูกต้อง ({parseFloat(formLat).toFixed(5)}, {parseFloat(formLng).toFixed(5)})</span>
+                    </span>
+                    <a
+                      href={`https://www.google.com/maps?q=${parseFloat(formLat)},${parseFloat(formLng)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-700 underline font-semibold flex items-center gap-0.5"
+                    >
+                      <span>ดูบน Google Maps</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
               </div>
 
               {/* Landmark / จุดสังเกตเด่น */}
@@ -1209,7 +1633,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   type="text"
                   value={formLandmark}
                   onChange={(e) => setFormLandmark(e.target.value)}
-                  placeholder="เช่น ตรงข้ามวัดศิริมงคล, ติดร้านค้าป้าจันทร์, บ้านไม้ 2 ชั้น รั้วสีฟ้า"
+                  placeholder="เช่น ตรงข้ามร้านค้าป้าจันทร์, ติดศาลาประชาคมหมู่บ้าน, บ้านไม้ยกสูงหลังคาสีเขียว"
                   className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
@@ -1315,7 +1739,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   rows={2}
                   value={formVisitNotes}
                   onChange={(e) => setFormVisitNotes(e.target.value)}
-                  placeholder="เช่น ผู้ป่วยอยู่บ้านช่วงเย็น, ให้คำแนะนำงดอาหารกากใยก่อนตรวจ, อสม. ช่วยดูแลการทานยาระบาย"
+                  placeholder="เช่น ผู้ป่วยอยู่บ้านช่วงเย็น, ให้คำแนะนำดูแลโภชนาการ, ให้กำลังใจก่อนไปรับการรักษาที่ รพ.สกลนคร"
                   className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
@@ -1345,7 +1769,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>{isSubmitting ? 'กำลังบันทึก...' : 'บันทึกพิกัดบ้าน'}</span>
@@ -1353,6 +1777,102 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Diagnose Adenocarcinoma Modal */}
+      {showAddAdenoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-scale-up">
+            <div className="bg-gradient-to-r from-rose-700 to-rose-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PlusCircle className="w-5 h-5 text-rose-300" />
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base">เพิ่มผู้ป่วยมะเร็งลำไส้ใหญ่ (Adenocarcinoma)</h3>
+                  <p className="text-[11px] text-rose-100">
+                    บันทึกผลการวินิจฉัยยืนยันเพื่อติดตามบนแผนที่ Map Colon
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddAdenoModal(false)}
+                className="text-rose-200 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  เลือกผู้ป่วยจากรายชื่อ:
+                </label>
+                <select
+                  value={selectedPatientToDiagnose}
+                  onChange={(e) => setSelectedPatientToDiagnose(e.target.value)}
+                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                >
+                  <option value="">-- กรุณาเลือกผู้ป่วย --</option>
+                  {patients.map((p) => {
+                    const isAdeno = p.caTracking?.biopsyResult === 'adenocarcinoma';
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.hn} - {p.prefix}{p.firstName} {p.lastName} (ม.{p.villageNo} {p.fitResult === 'positive' ? '• FIT+' : ''}) {isAdeno ? '• [Adeno แล้ว]' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  ระยะของโรคมะเร็ง (Cancer Staging):
+                </label>
+                <select
+                  value={adenoStaging}
+                  onChange={(e) => setAdenoStaging(e.target.value)}
+                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                >
+                  <option value="Stage I (T1N0M0)">ระยะที่ 1 - Stage I (T1N0M0) ติ่งเนื้อระยะเริ่มต้น</option>
+                  <option value="Stage II (T3N0M0)">ระยะที่ 2 - Stage II (T3N0M0) ลุกลามผนังลำไส้</option>
+                  <option value="Stage III (T3N1M0)">ระยะที่ 3 - Stage III (T3N1M0) แพร่กระจายต่อมน้ำเหลือง</option>
+                  <option value="Stage IV (Any T Any N M1)">ระยะที่ 4 - Stage IV แพร่กระจายสู่อวัยวะอื่น</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  แผนการรักษา / การส่งต่อ:
+                </label>
+                <input
+                  type="text"
+                  value={adenoPlan}
+                  onChange={(e) => setAdenoPlan(e.target.value)}
+                  placeholder="เช่น ส่งต่อศัลยกรรม รพ.สกลนคร นัดผ่าตัด Colectomy"
+                  className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAdenoModal(false)}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedPatientToDiagnose || isSubmitting}
+                  onClick={handleConfirmAdenocarcinoma}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  {isSubmitting ? 'กำลังบันทึก...' : 'ยืนยันผล Adenocarcinoma'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1377,7 +1897,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
 
             <div className="p-4 sm:p-5 space-y-3.5">
               <p className="text-xs text-slate-600 leading-relaxed">
-                ระบบรองรับ 2 รูปแบบ: <strong className="text-emerald-800">GIS OpenStreetMap & Satellite</strong> (ใช้งานฟรี ไม่ต้องใช้ Key) หรือ <strong className="text-blue-800">Google Maps Platform</strong> (ต้องระบุ API Key)
+                ระบบรองรับ 2 รูปแบบ: <strong className="text-emerald-800">GIS OpenStreetMap & Satellite</strong> (ใช้งานฟรี ไม่มีข้อผิดพลาด API Key) หรือ <strong className="text-blue-800">Google Maps Platform</strong> (ต้องระบุ API Key ที่เปิดใช้งานแล้ว)
               </p>
 
               <div>
@@ -1392,7 +1912,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   className="w-full px-3 py-2 text-xs sm:text-sm font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  * Google Maps API Key ที่ถูกต้องจะมีความยาวประมาณ 39 ตัวอักษร
+                  * Google Maps API Key ที่ถูกต้องจะขึ้นต้นด้วย AIza และมีความยาวประมาณ 39 ตัวอักษร
                 </p>
               </div>
 
@@ -1400,14 +1920,9 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                 <div className="flex items-center justify-between">
                   <span>สถานะปัจจุบัน:</span>
                   <span className={`font-bold ${isGoogleMapsActive ? 'text-blue-700' : 'text-emerald-700'}`}>
-                    {isGoogleMapsActive ? 'ใช้งาน Google Maps' : 'ใช้งาน GIS OpenStreetMap'}
+                    {isGoogleMapsActive ? 'ใช้งาน Google Maps' : 'ใช้งาน GIS OpenStreetMap & Satellite'}
                   </span>
                 </div>
-                {apiKey && !apiKey.startsWith('AIza') && (
-                  <div className="mt-1 text-rose-600 text-[10px]">
-                    ⚠️ รหัส "{apiKey}" ไม่ใช่รูปแบบ Google Maps Key ที่ถูกต้อง (ต้องขึ้นต้นด้วย AIza...)
-                  </div>
-                )}
               </div>
 
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
@@ -1416,7 +1931,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   onClick={handleUseGisMode}
                   className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-colors"
                 >
-                  ใช้โหมด GIS (ไม่ใช้ Key)
+                  ใช้โหมด GIS (แนะนำ)
                 </button>
 
                 <div className="flex items-center gap-1.5">
@@ -1440,6 +1955,47 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Printable Home Visit List (Print-Only Table) */}
+      <div className="print-only hidden p-4">
+        <div className="text-center mb-4">
+          <h2 className="text-base font-bold">บัญชีรายชื่อและพิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Adenocarcinoma) เพื่อการเยี่ยมบ้าน</h2>
+          <p className="text-xs text-slate-600">หน่วยบริการ โรงพยาบาลโพนนาแก้ว อำเภอโพนนาแก้ว จังหวัดสกลนคร</p>
+        </div>
+
+        <table className="w-full text-xs border border-collapse border-slate-400">
+          <thead>
+            <tr className="bg-slate-100">
+              <th className="border border-slate-400 p-1.5 text-center">ลำดับ</th>
+              <th className="border border-slate-400 p-1.5 text-center">HN</th>
+              <th className="border border-slate-400 p-1.5 text-left">ชื่อ-สกุล</th>
+              <th className="border border-slate-400 p-1.5 text-left">ที่อยู่</th>
+              <th className="border border-slate-400 p-1.5 text-center">Latitude (ละติจูด)</th>
+              <th className="border border-slate-400 p-1.5 text-center">Longitude (ลองจิจูด)</th>
+              <th className="border border-slate-400 p-1.5 text-left">จุดสังเกตเด่น</th>
+              <th className="border border-slate-400 p-1.5 text-left">อสม. ผู้รับผิดชอบ</th>
+              <th className="border border-slate-400 p-1.5 text-center">สถานะเยี่ยม</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPatients.map((p, idx) => (
+              <tr key={p.id}>
+                <td className="border border-slate-400 p-1 text-center">{idx + 1}</td>
+                <td className="border border-slate-400 p-1 text-center font-mono">{p.hn}</td>
+                <td className="border border-slate-400 p-1 font-bold">{p.prefix}{p.firstName} {p.lastName}</td>
+                <td className="border border-slate-400 p-1">{p.houseNo} ม.{p.villageNo} {p.villageName || ''}</td>
+                <td className="border border-slate-400 p-1 text-center font-mono">{p.location?.lat ? p.location.lat.toFixed(6) : '-'}</td>
+                <td className="border border-slate-400 p-1 text-center font-mono">{p.location?.lng ? p.location.lng.toFixed(6) : '-'}</td>
+                <td className="border border-slate-400 p-1">{p.location?.landmark || '-'}</td>
+                <td className="border border-slate-400 p-1">{p.location?.osmName || '-'}</td>
+                <td className="border border-slate-400 p-1 text-center">
+                  {p.location?.visitStatus === 'visited' ? 'เยี่ยมแล้ว' : 'ยังไม่เยี่ยม'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

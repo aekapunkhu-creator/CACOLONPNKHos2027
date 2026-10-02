@@ -19,9 +19,9 @@ import firebaseConfigJson from '../../firebase-applet-config.json';
 import { PatientScreening } from '../types';
 import { INITIAL_PATIENTS } from '../mockData';
 
-// Set Firestore log level to error to avoid clock-skew warning messages in sandboxed dev environments
+// Set Firestore log level to silent to prevent internal clock-skew warnings from logging to console
 try {
-  setLogLevel('error');
+  setLogLevel('silent');
 } catch {}
 
 // Initialize Firebase App

@@ -62,15 +62,17 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge initial locations if not yet present in existing storage
+          // Merge initial locations and confirmed caTracking if not yet present in existing storage
           return parsed.map((p: PatientScreening) => {
-            if (!p.location) {
-              const match = INITIAL_PATIENTS.find((init) => init.id === p.id);
-              if (match?.location) {
-                return { ...p, location: match.location };
-              }
+            const match = INITIAL_PATIENTS.find((init) => init.id === p.id);
+            let updated = { ...p };
+            if (!updated.location && match?.location) {
+              updated.location = match.location;
             }
-            return p;
+            if (match?.caTracking?.biopsyResult === 'adenocarcinoma' && updated.caTracking?.biopsyResult !== 'adenocarcinoma') {
+              updated.caTracking = { ...(updated.caTracking || {}), ...match.caTracking };
+            }
+            return updated;
           });
         }
       }
@@ -511,6 +513,7 @@ export default function App() {
           <CaColonTrackingView
             patients={patients}
             onUpdatePatient={handleUpdatePatient}
+            onNavigateToMap={handleNavigateToMap}
           />
         )}
 
