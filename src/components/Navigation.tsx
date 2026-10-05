@@ -92,24 +92,16 @@ export const Navigation: React.FC<NavigationProps> = ({
     },
     {
       id: 'ca-colon-tracking' as TabId,
-      name: '7. ติดตาม CA Colon',
-      shortName: 'ติดตาม CA',
-      desc: 'ผู้ป่วยสงสัย & Patient Journey',
+      name: '7. ติดตาม CA & Map Colon',
+      shortName: 'ติดตาม CA & Map',
+      desc: 'Patient Journey & แผนที่พิกัดบ้าน',
       icon: Stethoscope,
       badge: overdueCount > 0 ? `${overdueCount} เกินกำหนด` : (positiveCount > 0 ? `${positiveCount}` : null),
       badgeColor: overdueCount > 0 ? 'bg-rose-600 text-white animate-pulse' : 'bg-amber-100 text-amber-800'
     },
     {
-      id: 'map-colon' as TabId,
-      name: '8. Map Colon',
-      shortName: 'Map Colon',
-      desc: 'ผู้ป่วย Adenocarcinoma & พิกัดบ้าน',
-      icon: MapPin,
-      badge: null
-    },
-    {
       id: 'all-list' as TabId,
-      name: '9. รายชื่อทั้งหมด',
+      name: '8. รายชื่อทั้งหมด',
       shortName: 'รายชื่อ',
       desc: 'ตารางข้อมูลครบ & ส่งออก Excel',
       icon: Users,

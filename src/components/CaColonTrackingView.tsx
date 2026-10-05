@@ -24,28 +24,68 @@ import {
   Stethoscope,
   Microscope,
   HelpCircle,
-  MapPin
+  MapPin,
+  Share2,
+  Copy,
+  MessageCircle,
+  X,
+  ExternalLink,
+  Compass,
+  QrCode
 } from 'lucide-react';
 import { PatientJourneyModal } from './PatientJourneyModal';
 import { QuickCallLogModal } from './QuickCallLogModal';
 import { QuickAppointmentModal } from './QuickAppointmentModal';
 import { QuickColonoscopyModal } from './QuickColonoscopyModal';
+import { MapColonView } from './MapColonView';
 
 interface CaColonTrackingViewProps {
   patients: PatientScreening[];
-  onUpdatePatient: (updated: PatientScreening) => void;
+  initialHn?: string;
+  initialSubView?: 'table' | 'map';
+  onUpdatePatient: (updated: PatientScreening) => Promise<void> | void;
+  onNavigateToReferral?: (hn: string) => void;
   onNavigateToMap?: (hn: string) => void;
+  isWidescreen16x9?: boolean;
 }
 
 export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
   patients,
+  initialHn,
+  initialSubView = 'table',
   onUpdatePatient,
-  onNavigateToMap
+  onNavigateToReferral,
+  onNavigateToMap,
+  isWidescreen16x9 = true
 }) => {
+  // Sub-view toggle: 'table' vs 'map' (Map Colon moved into CA Colon tracking page)
+  const [subView, setSubView] = useState<'table' | 'map'>(initialSubView);
+  const [targetMapHn, setTargetMapHn] = useState<string | undefined>(initialHn);
+
+  // Sync if initialSubView or initialHn changes externally
+  React.useEffect(() => {
+    if (initialSubView) setSubView(initialSubView);
+  }, [initialSubView]);
+
+  React.useEffect(() => {
+    if (initialHn) setTargetMapHn(initialHn);
+  }, [initialHn]);
+
+  // VHV Public Pin Share Modal state
+  const [sharingVhvPatient, setSharingVhvPatient] = useState<PatientScreening | null>(null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [showQrCode, setShowQrCode] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
   // State for search and filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [onlyOverdue, setOnlyOverdue] = useState<boolean>(false);
+  const [onlyAdeno, setOnlyAdeno] = useState<boolean>(false);
   const [subdistrictFilter, setSubdistrictFilter] = useState<string>('all');
 
   // Modal states
@@ -111,9 +151,14 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
         if (!isOverdue) return false;
       }
 
+      // 5. Only Adenocarcinoma filter
+      if (onlyAdeno && p.caTracking?.biopsyResult !== 'adenocarcinoma') {
+        return false;
+      }
+
       return true;
     });
-  }, [positivePatients, searchTerm, statusFilter, subdistrictFilter, onlyOverdue, referenceDate]);
+  }, [positivePatients, searchTerm, statusFilter, subdistrictFilter, onlyOverdue, onlyAdeno, referenceDate]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -244,8 +289,45 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
     }
   };
 
+  // Filter Adenocarcinoma patients
+  const adenoPatients = useMemo(() => {
+    return patients.filter(p => p.caTracking?.biopsyResult === 'adenocarcinoma');
+  }, [patients]);
+
+  const getVhvPublicPinUrl = (p: PatientScreening) => {
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      return `${origin}${pathname}?mode=pin_house&hn=${encodeURIComponent(p.hn)}`;
+    }
+    return `?mode=pin_house&hn=${encodeURIComponent(p.hn)}`;
+  };
+
+  const handleShareVhvPinToLine = (p: PatientScreening) => {
+    const pinUrl = getVhvPublicPinUrl(p);
+    const isAdeno = p.caTracking?.biopsyResult === 'adenocarcinoma';
+    const text = `📍 ขอความอนุเคราะห์ อสม. หรือเจ้าหน้าที่ ช่วยกดส่งพิกัด GPS บ้านผู้ป่วย (ไม่ต้อง Login):\n` +
+      `👤 ผู้ป่วย: ${p.prefix}${p.firstName} ${p.lastName} (HN: ${p.hn})\n` +
+      `🏠 ที่อยู่: บ้านเลขที่ ${p.houseNo} ม.${p.villageNo} ${p.villageName || ''} ต.${p.subdistrict || 'นาแก้ว'}\n` +
+      `🎗️ การวินิจฉัย: ${isAdeno ? 'มะเร็งลำไส้ใหญ่ (Adenocarcinoma) ' + (p.caTracking?.cancerStaging || '') : 'กลุ่มคัดกรอง FIT ผลบวก'}\n` +
+      `🏥 รพ.โพนนาแก้ว\n` +
+      `👉 กดลิงก์นี้บนมือถือเพื่อปักหมุด GPS บ้านผู้ป่วย:\n${pinUrl}`;
+    window.open(`https://line.me/R/msg/text/?${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="fixed top-20 right-4 z-50 bg-slate-900/90 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-sm border border-emerald-500/30 animate-fade-in backdrop-blur-md">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-white">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Page Title & Mission Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-teal-900 to-emerald-950 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1.5">
@@ -255,10 +337,10 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-bold tracking-tight">
-                ระบบติดตามผู้ป่วยสงสัยมะเร็งลำไส้ใหญ่ (CA Colon Active Tracking)
+                ระบบติดตามผู้ป่วยสงสัยมะเร็งลำไส้ใหญ่ (CA Colon Active Tracking & Map)
               </h2>
               <p className="text-teal-200/80 text-xs">
-                โรงพยาบาลโพนนาแก้ว • ติดตามเชิงรุกผู้มีผล FIT Test เป็นบวก (Code 1B0061) ส่งต่อส่องกล้อง รพ.สกลนคร
+                โรงพยาบาลโพนนาแก้ว • ติดตามเชิงรุกผู้มีผล FIT Test เป็นบวก (Code 1B0061) และแผนที่พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่
               </p>
             </div>
           </div>
@@ -267,7 +349,10 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
         <div className="flex items-center gap-2">
           {stats.overdueCount > 0 && (
             <button
-              onClick={() => setOnlyOverdue(!onlyOverdue)}
+              onClick={() => {
+                setSubView('table');
+                setOnlyOverdue(!onlyOverdue);
+              }}
               className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md ${
                 onlyOverdue
                   ? 'bg-rose-500 text-white ring-2 ring-white'
@@ -281,8 +366,61 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
         </div>
       </div>
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      {/* Sub-View Switcher: Table vs Map Colon */}
+      <div className="flex items-center justify-between flex-wrap gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl text-xs sm:text-sm">
+          <button
+            type="button"
+            onClick={() => setSubView('table')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              subView === 'table'
+                ? 'bg-white text-emerald-800 shadow-xs border border-slate-200'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Stethoscope className="w-4 h-4 text-emerald-700" />
+            <span>ตารางติดตาม (Patient Journey Table)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSubView('map')}
+            className={`px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              subView === 'map'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            <span>แผนที่พิกัดบ้าน (Map Colon)</span>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              subView === 'map' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {adenoPatients.length} ราย
+            </span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-500 hidden sm:flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>รวมมุมมองตารางคลินิกและแผนที่พิกัดบ้าน อสม. ไว้ในหน้าเดียว</span>
+        </div>
+      </div>
+
+      {/* Map Colon Sub-View */}
+      {subView === 'map' ? (
+        <MapColonView
+          patients={patients}
+          initialHn={targetMapHn}
+          onUpdatePatient={onUpdatePatient}
+          onNavigateToReferral={onNavigateToReferral}
+          onNavigateToTracking={() => setSubView('table')}
+          isWidescreen16x9={isWidescreen16x9}
+        />
+      ) : (
+        <>
+          {/* Summary KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Total Positive */}
         <div 
           onClick={() => { setStatusFilter('all'); setOnlyOverdue(false); }}
@@ -412,7 +550,7 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
             <button
               type="button"
               onClick={() => setOnlyOverdue(!onlyOverdue)}
-              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 ${
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 cursor-pointer ${
                 onlyOverdue
                   ? 'bg-rose-600 border-rose-600 text-white shadow-xs'
                   : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -422,8 +560,26 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
               <span>เฉพาะเกิน 7 วัน</span>
             </button>
 
+            {/* Adenocarcinoma Filter button */}
+            <button
+              type="button"
+              onClick={() => setOnlyAdeno(!onlyAdeno)}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                onlyAdeno
+                  ? 'bg-rose-700 border-rose-700 text-white shadow-xs ring-2 ring-rose-300'
+                  : 'bg-rose-50 border-rose-200 text-rose-800 hover:bg-rose-100'
+              }`}
+            >
+              <span>🎗️ มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                onlyAdeno ? 'bg-white text-rose-900' : 'bg-rose-200 text-rose-900'
+              }`}>
+                {adenoPatients.length}
+              </span>
+            </button>
+
             {/* Clear Filters */}
-            {(searchTerm || statusFilter !== 'all' || subdistrictFilter !== 'all' || onlyOverdue) && (
+            {(searchTerm || statusFilter !== 'all' || subdistrictFilter !== 'all' || onlyOverdue || onlyAdeno) && (
               <button
                 type="button"
                 onClick={() => {
@@ -431,8 +587,9 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                   setStatusFilter('all');
                   setSubdistrictFilter('all');
                   setOnlyOverdue(false);
+                  setOnlyAdeno(false);
                 }}
-                className="px-3 py-2 text-xs text-slate-500 hover:text-slate-800 hover:underline"
+                className="px-3 py-2 text-xs text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
               >
                 ล้างตัวกรอง
               </button>
@@ -461,6 +618,7 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
               <tr>
                 <th className="py-3.5 px-4 whitespace-nowrap">HN / ที่อยู่</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">ชื่อ-นามสกุล / เพศ / อายุ</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">พิกัดบ้าน GPS (Lat, Lng)</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">เบอร์โทรศัพท์</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">วันที่ผล FIT ออก</th>
                 <th className="py-3.5 px-4 whitespace-nowrap">สถานะปัจจุบัน & Clinical Notes</th>
@@ -471,7 +629,7 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-500">
+                  <td colSpan={8} className="text-center py-12 text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Search className="w-8 h-8 text-slate-300" />
                       <p className="font-semibold text-slate-600">ไม่พบข้อมูลตามเงื่อนไขการค้นหา</p>
@@ -482,6 +640,8 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
               ) : (
                 filteredPatients.map((patient) => {
                   const tracking = patient.caTracking;
+                  const isAdeno = tracking?.biopsyResult === 'adenocarcinoma';
+                  const hasPin = Boolean(patient.location && patient.location.lat && patient.location.lng);
                   const { days: daysSinceFit, isOverdue } = getOverdueInfo(patient);
                   const fitDateStr = tracking?.fitPositiveDate || patient.testedDate?.slice(0, 10) || '-';
                   const appointmentDateStr = tracking?.appointmentDate || patient.referral?.appointmentDate;
@@ -490,6 +650,8 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                     <tr 
                       key={patient.id}
                       className={`hover:bg-teal-50/40 transition-colors ${
+                        isAdeno ? 'bg-rose-50/20' : ''
+                      } ${
                         isOverdue ? 'bg-rose-50/40' : ''
                       }`}
                     >
@@ -506,14 +668,99 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Name & Age */}
+                      {/* Name & Age & Adeno diagnosis */}
                       <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">
-                          {patient.prefix}{patient.firstName} {patient.lastName}
+                        <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                          <span>{patient.prefix}{patient.firstName} {patient.lastName}</span>
                         </div>
                         <div className="text-xs text-slate-500">
                           อายุ {patient.ageYears} ปี • เพศ{patient.gender} • {patient.benefitCode}
                         </div>
+                        {isAdeno && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
+                              <span>🎗️ มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+                              {tracking?.cancerStaging && (
+                                <span className="font-semibold text-rose-900">• {tracking.cancerStaging}</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* GPS Coordinates (Lat, Lng) & Pin Status */}
+                      <td className="py-3 px-4">
+                        {hasPin && patient.location?.lat && patient.location?.lng ? (
+                          <div className="space-y-1">
+                            <div className="font-mono text-xs font-bold text-slate-900 flex items-center gap-1">
+                              <Compass className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              <span className="text-emerald-800">
+                                {patient.location.lat.toFixed(6)}, {patient.location.lng.toFixed(6)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px]">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const coords = `${patient.location?.lat?.toFixed(6)}, ${patient.location?.lng?.toFixed(6)}`;
+                                  navigator.clipboard.writeText(coords);
+                                  showToast(`คัดลอกพิกัด Lat, Lng แล้ว: ${coords}`);
+                                }}
+                                className="text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
+                                title="คัดลอกพิกัด Latitude, Longitude"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>คัดลอก</span>
+                              </button>
+                              <span className="text-slate-300">•</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTargetMapHn(patient.hn);
+                                  setSubView('map');
+                                }}
+                                className="text-blue-700 hover:text-blue-900 hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
+                                title="เปิดดูบนแผนที่ Map Colon"
+                              >
+                                <MapPin className="w-3 h-3" />
+                                <span>ดูแผนที่</span>
+                              </button>
+                              <span className="text-slate-300">•</span>
+                              <button
+                                type="button"
+                                onClick={() => setSharingVhvPatient(patient)}
+                                className="text-teal-700 hover:text-teal-900 hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
+                                title="แชร์ลิงก์ให้ อสม."
+                              >
+                                <Share2 className="w-3 h-3" />
+                                <span>แชร์</span>
+                              </button>
+                            </div>
+                            {patient.location.landmark && (
+                              <div className="text-[10px] text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/50 truncate max-w-[190px]" title={patient.location.landmark}>
+                                🚩 {patient.location.landmark}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                              <AlertTriangle className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                              <span>ยังไม่ระบุพิกัด</span>
+                            </span>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setSharingVhvPatient(patient)}
+                                className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-colors cursor-pointer"
+                                title="ปักหมุดแผนที่ไม่ได้? แชร์ลิงก์ให้ อสม./เจ้าหน้าที่ กดส่งพิกัดขึ้นมา โดยไม่ต้อง Login"
+                              >
+                                <Share2 className="w-3 h-3" />
+                                <span>แชร์ให้ อสม. ปักหมุด</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </td>
 
                       {/* Phone */}
@@ -600,7 +847,7 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                             type="button"
                             title="บันทึกการโทรติดต่อ"
                             onClick={() => setCallLogPatient(patient)}
-                            className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors"
+                            className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
                           >
                             <PhoneCall className="w-4 h-4" />
                           </button>
@@ -610,7 +857,7 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                             type="button"
                             title="เลื่อนนัด / บันทึกนัดส่องกล้อง"
                             onClick={() => setAppointmentPatient(patient)}
-                            className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                            className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
                           >
                             <Calendar className="w-4 h-4" />
                           </button>
@@ -620,35 +867,47 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
                             type="button"
                             title="บันทึกผลส่องกล้อง & ชิ้นเนื้อ"
                             onClick={() => setColonoscopyPatient(patient)}
-                            className="p-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                            className="p-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors cursor-pointer"
                           >
                             <Activity className="w-4 h-4" />
                           </button>
 
-                          {/* Map Colon Navigation */}
-                          {onNavigateToMap && (
-                            <button
-                              type="button"
-                              title={patient.caTracking?.biopsyResult === 'adenocarcinoma' 
-                                ? "เปิดแผนที่พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Map Colon)" 
-                                : "เปิดแผนที่และปักหมุดบ้าน"}
-                              onClick={() => onNavigateToMap(patient.hn)}
-                              className={`p-1.5 rounded-lg border transition-colors ${
-                                patient.caTracking?.biopsyResult === 'adenocarcinoma'
-                                  ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-300 ring-2 ring-rose-400/30'
-                                  : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
-                              }`}
-                            >
-                              <MapPin className="w-4 h-4" />
-                            </button>
-                          )}
+                          {/* Map Colon Navigation - ALWAYS ACTIVE */}
+                          <button
+                            type="button"
+                            title={isAdeno 
+                              ? "เปิดแผนที่พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Map Colon)" 
+                              : "เปิดแผนที่และปักหมุดบ้าน (Map Colon)"}
+                            onClick={() => {
+                              setTargetMapHn(patient.hn);
+                              setSubView('map');
+                              if (onNavigateToMap) onNavigateToMap(patient.hn);
+                            }}
+                            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                              isAdeno
+                                ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border-rose-300 ring-2 ring-rose-400/30'
+                                : 'text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                            }`}
+                          >
+                            <MapPin className="w-4 h-4" />
+                          </button>
+
+                          {/* Share VHV Public Pin Link */}
+                          <button
+                            type="button"
+                            title="แชร์ลิงก์ให้ อสม./เจ้าหน้าที่ กดส่งพิกัดขึ้นมา (ไม่ต้อง Login)"
+                            onClick={() => setSharingVhvPatient(patient)}
+                            className="p-1.5 text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Share2 className="w-4 h-4" />
+                          </button>
 
                           {/* Detail / Patient Journey */}
                           <button
                             type="button"
                             title="ดูเส้นทางการดูแลผู้ป่วย (Patient Journey)"
                             onClick={() => setDetailPatient(patient)}
-                            className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg flex items-center gap-1 transition-colors"
+                            className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5 text-slate-600" />
                             <span>ดูไทม์ไลน์</span>
@@ -663,6 +922,8 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {/* MODALS */}
 
@@ -727,6 +988,193 @@ export const CaColonTrackingView: React.FC<CaColonTrackingViewProps> = ({
             }
           }}
         />
+      )}
+
+      {/* 5. VHV Public Pin Share Modal (ปักหมุดแผนที่ไม่ได้ แชร์ลิงก์ให้ อสม./เจ้าหน้าที่ กดส่งพิกัดขึ้นมา โดยไม่ต้อง Login) */}
+      {sharingVhvPatient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-scale-up">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-950 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-teal-200">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm sm:text-base">แชร์ลิงก์ปักหมุดบ้านผู้ป่วย</h3>
+                  <p className="text-[11px] text-teal-200">
+                    ให้ อสม. หรือเจ้าหน้าที่ กดส่งพิกัดขึ้นมา <strong className="text-white underline">โดยไม่ต้อง Login</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSharingVhvPatient(null);
+                  setShowQrCode(false);
+                }}
+                className="text-teal-200 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              {/* Patient summary */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-slate-900">
+                    {sharingVhvPatient.prefix}{sharingVhvPatient.firstName} {sharingVhvPatient.lastName}
+                  </div>
+                  <span className="font-mono text-xs bg-slate-200 px-2 py-0.5 rounded text-slate-700">
+                    HN: {sharingVhvPatient.hn}
+                  </span>
+                </div>
+                <div className="text-slate-600 mt-1">
+                  🏠 ที่อยู่: บ้านเลขที่ {sharingVhvPatient.houseNo} ม.{sharingVhvPatient.villageNo} {sharingVhvPatient.villageName || ''} ต.{sharingVhvPatient.subdistrict || 'นาแก้ว'} อ.โพนนาแก้ว
+                </div>
+                {sharingVhvPatient.caTracking?.biopsyResult === 'adenocarcinoma' && (
+                  <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    <span>🎗️ มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+                    {sharingVhvPatient.caTracking.cancerStaging && <span>({sharingVhvPatient.caTracking.cancerStaging})</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Status & Coordinates */}
+              {sharingVhvPatient.location?.lat && sharingVhvPatient.location?.lng ? (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-1">
+                  <div className="font-bold text-emerald-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Compass className="w-4 h-4 text-emerald-700" />
+                      <span>มีพิกัดบ้านในระบบแล้ว</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                      พร้อมใช้งาน
+                    </span>
+                  </div>
+                  <div className="font-mono text-slate-800 pt-1 flex justify-between">
+                    <span>Latitude (ละติจูด):</span>
+                    <strong>{sharingVhvPatient.location.lat.toFixed(6)}</strong>
+                  </div>
+                  <div className="font-mono text-slate-800 flex justify-between">
+                    <span>Longitude (ลองจิจูด):</span>
+                    <strong>{sharingVhvPatient.location.lng.toFixed(6)}</strong>
+                  </div>
+                  <p className="text-[10px] text-emerald-700 pt-1">
+                    หากตำแหน่งยังไม่แม่นยำ สามารถส่งลิงก์ให้ อสม. ไปยืนหน้าบ้านแล้วกดอัปเดตใหม่ได้
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>ผู้ป่วยท่านนี้ยังไม่มีพิกัดบ้าน (ปักหมุดแผนที่ไม่ได้)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                    ส่งลิงก์นี้ให้ อสม. หรือญาติผู้ป่วย เปิดผ่าน LINE หรือเบราว์เซอร์บนมือถือเพื่อกด <strong>"ดึงพิกัด GPS ขณะอยู่หน้าบ้าน"</strong> แล้วส่งพิกัดเข้าสู่ระบบได้ทันที <strong>โดยไม่ต้อง Login</strong>
+                  </p>
+                </div>
+              )}
+
+              {/* Public URL Box */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  🔗 ลิงก์สำหรับ อสม. (ไม่ต้อง Login)
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={getVhvPublicPinUrl(sharingVhvPatient)}
+                    className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-700 focus:outline-hidden select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getVhvPublicPinUrl(sharingVhvPatient);
+                      navigator.clipboard.writeText(url);
+                      setCopiedLink(true);
+                      showToast('คัดลอกลิงก์ปักหมุดสำหรับ อสม. สำเร็จ!');
+                      setTimeout(() => setCopiedLink(false), 2500);
+                    }}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex-shrink-0 transition-colors cursor-pointer"
+                  >
+                    {copiedLink ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Share Actions */}
+              <div className="space-y-2 pt-1">
+                {/* 1. LINE Share Button */}
+                <button
+                  type="button"
+                  onClick={() => handleShareVhvPinToLine(sharingVhvPatient)}
+                  className="w-full py-2.5 px-4 bg-[#06c755] hover:bg-[#05b34c] text-white rounded-xl text-sm font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  <span>แชร์เข้า LINE ทันที (พร้อมข้อความขอพิกัด)</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {/* QR Code toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setShowQrCode(!showQrCode)}
+                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4 text-slate-600" />
+                    <span>{showQrCode ? 'ซ่อน QR Code' : 'แสดง QR Code'}</span>
+                  </button>
+
+                  {/* Test open button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getVhvPublicPinUrl(sharingVhvPatient);
+                      window.open(url, '_blank');
+                    }}
+                    className="py-2 px-3 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-teal-200 transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="w-4 h-4 text-teal-600" />
+                    <span>ทดสอบเปิดหน้าปักหมุด</span>
+                  </button>
+                </div>
+
+                {/* QR Code Display */}
+                {showQrCode && (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 animate-fade-in">
+                    <div className="bg-white p-2 rounded-xl shadow-xs border border-slate-200">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getVhvPublicPinUrl(sharingVhvPatient))}`}
+                        alt="QR Code สำหรับปักหมุดบ้าน"
+                        className="w-40 h-40 object-contain"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 text-center">
+                      ให้ อสม. หรือเจ้าหน้าที่ใช้กล้องโทรศัพท์มือถือสแกนเพื่อเปิดหน้าส่งพิกัดได้ทันที
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Close Button */}
+              <div className="pt-2 flex justify-end border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSharingVhvPatient(null);
+                    setShowQrCode(false);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  ปิดหน้าต่าง
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

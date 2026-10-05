@@ -25,12 +25,30 @@ import { LoginView } from './components/LoginView';
 import { EditPatientModal } from './components/EditPatientModal';
 import { DeletePatientConfirmModal } from './components/DeletePatientConfirmModal';
 import { VhvMobileVitalsView } from './components/VhvMobileVitalsView';
+import { VhvPublicPinHouseView } from './components/VhvPublicPinHouseView';
 import { Cloud, CheckCircle2, Smartphone, ShieldCheck, Loader2 } from 'lucide-react';
 
 const STORAGE_KEY = 'pnk_hospital_fit_screening_v1';
 const AUTH_KEY = 'pnk_current_auth_user';
 
 export default function App() {
+  // Check if URL specifies public Pin House mode (?mode=pin_house or #pin_house) without login!
+  const [publicPinHn, setPublicPinHn] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search;
+      const hash = window.location.hash;
+      const params = new URLSearchParams(search);
+      if (params.get('mode') === 'pin_house') {
+        return params.get('hn') || params.get('id') || '';
+      }
+      if (hash.includes('pin_house')) {
+        const parts = hash.split('/');
+        return parts[1] || '';
+      }
+    }
+    return null;
+  });
+
   // Check if URL specifies VHV mobile mode (?mode=vhv_vitals or #vhv_vitals)
   const [isVhvMode, setIsVhvMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -322,7 +340,7 @@ export default function App() {
 
   const handleNavigateToMap = (hn?: string) => {
     setTargetHnForNextTab(hn);
-    setActiveTab('map-colon');
+    setActiveTab('ca-colon-tracking');
   };
 
   // Print Handlers
@@ -375,6 +393,27 @@ export default function App() {
       window.history.pushState({}, '', url.toString());
     }
   };
+
+  // If public Pin House mode is requested (via shared link/QR code for VHV), show pin view WITHOUT login!
+  if (publicPinHn !== null) {
+    return (
+      <VhvPublicPinHouseView
+        patients={patients}
+        initialHn={publicPinHn}
+        onUpdatePatient={handleUpdatePatient}
+        onExit={() => {
+          setPublicPinHn(null);
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('mode');
+            url.searchParams.delete('hn');
+            url.searchParams.delete('id');
+            window.history.pushState({}, '', url.toString());
+          }
+        }}
+      />
+    );
+  }
 
   // If user requested VHV mobile mode (via QR code or direct link), show mobile view WITHOUT requiring login!
   if (isVhvMode) {
@@ -509,21 +548,13 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'ca-colon-tracking' && (
+        {(activeTab === 'ca-colon-tracking' || activeTab === 'map-colon') && (
           <CaColonTrackingView
             patients={patients}
-            onUpdatePatient={handleUpdatePatient}
-            onNavigateToMap={handleNavigateToMap}
-          />
-        )}
-
-        {activeTab === 'map-colon' && (
-          <MapColonView
-            patients={patients}
             initialHn={targetHnForNextTab}
+            initialSubView={activeTab === 'map-colon' ? 'map' : 'table'}
             onUpdatePatient={handleUpdatePatient}
             onNavigateToReferral={handleNavigateToReferral}
-            onNavigateToTracking={() => setActiveTab('ca-colon-tracking')}
             isWidescreen16x9={isWidescreen16x9}
           />
         )}

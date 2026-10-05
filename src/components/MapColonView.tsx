@@ -33,7 +33,8 @@ import {
   PlusCircle, 
   Navigation,
   Compass,
-  Check
+  Check,
+  QrCode
 } from 'lucide-react';
 
 interface MapColonViewProps {
@@ -147,6 +148,8 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
   const [sharingPatient, setSharingPatient] = useState<PatientScreening | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [copiedMessage, setCopiedMessage] = useState<boolean>(false);
+  const [showQrCode, setShowQrCode] = useState<boolean>(false);
+  const [copiedPublicPinUrl, setCopiedPublicPinUrl] = useState<boolean>(false);
 
   // Modal to quickly diagnose any patient as Adenocarcinoma
   const [showAddAdenoModal, setShowAddAdenoModal] = useState<boolean>(false);
@@ -543,11 +546,22 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     }
   };
 
+  // Public Pin House URL helper (for VHV / staff without login)
+  const getPublicPinUrl = (p: PatientScreening) => {
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      return `${origin}${pathname}?mode=pin_house&hn=${encodeURIComponent(p.hn)}`;
+    }
+    return `?mode=pin_house&hn=${encodeURIComponent(p.hn)}`;
+  };
+
   // Generate share pin message
   const composeShareText = (p: PatientScreening) => {
     const lat = p.location?.lat;
     const lng = p.location?.lng;
     const hasCoords = lat !== undefined && lng !== undefined;
+    const publicPinUrl = getPublicPinUrl(p);
 
     let msg = `📍 พิกัดบ้านผู้ป่วยมะเร็งลำไส้ใหญ่ (Adenocarcinoma)\n`;
     msg += `👤 ชื่อผู้ป่วย: ${p.prefix}${p.firstName} ${p.lastName} (HN: ${p.hn})\n`;
@@ -570,8 +584,10 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
     }
     if (hasCoords) {
       msg += `🧭 ลิงก์นำทาง Google Maps: https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}\n`;
+      msg += `🔄 ลิงก์แก้ไข/อัปเดตพิกัดบ้าน (สำหรับ อสม. ไม่ต้อง Login):\n${publicPinUrl}\n`;
     } else {
-      msg += `⚠️ ยังไม่มีการระบุพิกัดบ้าน ขอความอนุเคราะห์ อสม./ญาติ ช่วยส่งพิกัด\n`;
+      msg += `⚠️ ยังไม่มีการระบุพิกัดบ้าน (ปักหมุดแผนที่ไม่ได้)\n`;
+      msg += `👉 กดลิงก์นี้บนมือถือเพื่อส่งพิกัด GPS บ้านผู้ป่วย (ไม่ต้อง Login):\n${publicPinUrl}\n`;
     }
     msg += `🏥 ระบบติดตามผู้ป่วย รพ.โพนนาแก้ว`;
     return msg;
@@ -1363,35 +1379,64 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
       {/* Share Pin Link Modal (เพิ่มส่งลิ้งปักหมุดบ้านผู้ป่วย) */}
       {sharingPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-900/60 backdrop-blur-xs animate-fade-in no-print">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-scale-up">
-            <div className="bg-gradient-to-r from-emerald-800 to-teal-800 text-white p-4 flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-scale-up">
+            <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-950 text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-emerald-300" />
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base">ส่งลิงก์ปักหมุดบ้านผู้ป่วย</h3>
+                  <h3 className="font-bold text-sm sm:text-base">แชร์ลิงก์ปักหมุดบ้านผู้ป่วย</h3>
                   <p className="text-[11px] text-emerald-100">
-                    {sharingPatient.prefix}{sharingPatient.firstName} {sharingPatient.lastName} (HN: {sharingPatient.hn})
+                    ให้ อสม. หรือเจ้าหน้าที่ กดส่งพิกัดขึ้นมา <strong className="text-white underline">โดยไม่ต้อง Login</strong>
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setSharingPatient(null)}
-                className="text-emerald-200 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                onClick={() => {
+                  setSharingPatient(null);
+                  setShowQrCode(false);
+                }}
+                className="text-emerald-200 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 sm:p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+              {/* Patient info */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-sm text-slate-900">
+                    {sharingPatient.prefix}{sharingPatient.firstName} {sharingPatient.lastName}
+                  </div>
+                  <span className="font-mono text-xs bg-slate-200 px-2 py-0.5 rounded text-slate-700">
+                    HN: {sharingPatient.hn}
+                  </span>
+                </div>
+                <div className="text-slate-600 mt-1">
+                  🏠 ที่อยู่: บ้านเลขที่ {sharingPatient.houseNo} ม.{sharingPatient.villageNo} {sharingPatient.villageName || ''} ต.{sharingPatient.subdistrict || 'นาแก้ว'}
+                </div>
+                {sharingPatient.caTracking?.biopsyResult === 'adenocarcinoma' && (
+                  <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                    <span>🎗️ มะเร็งลำไส้ใหญ่ (Adenocarcinoma)</span>
+                    {sharingPatient.caTracking.cancerStaging && <span>({sharingPatient.caTracking.cancerStaging})</span>}
+                  </div>
+                )}
+              </div>
+
               {/* Coordinates Preview */}
               {sharingPatient.location?.lat && sharingPatient.location?.lng ? (
                 <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 font-mono text-xs text-emerald-900 space-y-1">
-                  <div className="font-bold text-emerald-800 text-xs mb-1 flex items-center gap-1">
-                    <Compass className="w-4 h-4 text-emerald-700" />
-                    <span>พิกัด GPS บ้านผู้ป่วย</span>
+                  <div className="font-bold text-emerald-800 text-xs mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Compass className="w-4 h-4 text-emerald-700" />
+                      <span>พิกัด GPS บ้านผู้ป่วยในระบบ</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                      พร้อมใช้งาน
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between pt-1">
                     <span>Latitude (ละติจูด):</span>
                     <strong className="text-slate-900">{sharingPatient.location.lat.toFixed(6)}</strong>
                   </div>
@@ -1399,15 +1444,49 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                     <span>Longitude (ลองจิจูด):</span>
                     <strong className="text-slate-900">{sharingPatient.location.lng.toFixed(6)}</strong>
                   </div>
+                  <p className="text-[10px] text-emerald-700 pt-1 font-sans">
+                    หากต้องการปรับตำแหน่งใหม่ สามารถส่งลิงก์ให้ อสม. ไปยืนหน้าบ้านแล้วกดอัปเดตพิกัดซ้ำได้
+                  </p>
                 </div>
               ) : (
-                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
-                  <div className="font-bold mb-1">⚠️ ผู้ป่วยท่านนี้ยังไม่ได้ระบุพิกัดบ้าน</div>
-                  <p className="text-[11px]">
-                    สามารถส่งข้อความขอความอนุเคราะห์ให้ อสม. หรือญาติ ช่วยส่งตำแหน่งพิกัดบ้านกลับมาได้
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span>ผู้ป่วยท่านนี้ยังไม่มีพิกัดบ้าน (ปักหมุดแผนที่ไม่ได้)</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                    สามารถส่งลิงก์นี้ให้ อสม. หรือญาติผู้ป่วย เปิดบนโทรศัพท์มือถือเพื่อกด <strong>"ดึงพิกัด GPS ขณะอยู่หน้าบ้าน"</strong> แล้วส่งพิกัดเข้าสู่ระบบได้ทันที <strong>โดยไม่ต้อง Login</strong>
                   </p>
                 </div>
               )}
+
+              {/* Public Pin Link Box */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  🔗 ลิงก์สำหรับ อสม./เจ้าหน้าที่ ส่งพิกัด (ไม่ต้อง Login)
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    readOnly
+                    value={getPublicPinUrl(sharingPatient)}
+                    className="w-full text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-700 focus:outline-hidden select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = getPublicPinUrl(sharingPatient);
+                      navigator.clipboard.writeText(url);
+                      setCopiedPublicPinUrl(true);
+                      showToast('คัดลอกลิงก์ปักหมุดสำหรับ อสม. สำเร็จ!');
+                      setTimeout(() => setCopiedPublicPinUrl(false), 2500);
+                    }}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold flex-shrink-0 transition-colors cursor-pointer"
+                  >
+                    {copiedPublicPinUrl ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                  </button>
+                </div>
+              </div>
 
               {/* Direct LINE Share Button */}
               <div>
@@ -1417,12 +1496,54 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   className="w-full py-2.5 px-4 bg-[#06c755] hover:bg-[#05b34c] text-white rounded-xl text-sm font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <MessageCircle className="w-5 h-5" />
-                  <span>แชร์พิกัดบ้านผ่าน LINE</span>
+                  <span>แชร์เข้า LINE ทันที (พร้อมลิงก์ปักหมุด & ที่อยู่)</span>
                 </button>
                 <p className="text-[10px] text-slate-400 text-center mt-1">
                   เปิดแอปพลิเคชัน LINE เพื่อส่งให้ อสม., ทีมหมอครอบครัว หรือกลุ่มงานเยี่ยมบ้าน
                 </p>
               </div>
+
+              {/* Action buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* QR Code toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowQrCode(!showQrCode)}
+                  className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-slate-200 transition-colors cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4 text-slate-600" />
+                  <span>{showQrCode ? 'ซ่อน QR Code' : 'แสดง QR Code'}</span>
+                </button>
+
+                {/* Test open button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = getPublicPinUrl(sharingPatient);
+                    window.open(url, '_blank');
+                  }}
+                  className="py-2 px-3 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-teal-200 transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4 text-teal-600" />
+                  <span>ทดสอบเปิดหน้าปักหมุด</span>
+                </button>
+              </div>
+
+              {/* QR Code Display */}
+              {showQrCode && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 animate-fade-in">
+                  <div className="bg-white p-2 rounded-xl shadow-xs border border-slate-200">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(getPublicPinUrl(sharingPatient))}`}
+                      alt="QR Code สำหรับปักหมุดบ้าน"
+                      className="w-40 h-40 object-contain"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 text-center">
+                    ให้ อสม. หรือเจ้าหน้าที่ใช้กล้องโทรศัพท์มือถือสแกนเพื่อเปิดหน้าส่งพิกัดได้ทันที
+                  </p>
+                </div>
+              )}
 
               {/* Copy Links Section */}
               <div className="space-y-2 pt-2 border-t border-slate-100">
@@ -1430,7 +1551,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                   <button
                     type="button"
                     onClick={() => handleCopyPinUrl(sharingPatient)}
-                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors"
+                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
                   >
                     <span className="flex items-center gap-1.5">
                       <Copy className="w-4 h-4 text-slate-500" />
@@ -1445,7 +1566,7 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyMessage(sharingPatient)}
-                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors"
+                  className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
                 >
                   <span className="flex items-center gap-1.5">
                     <Send className="w-4 h-4 text-slate-500" />
@@ -1472,8 +1593,11 @@ export const MapColonView: React.FC<MapColonViewProps> = ({
               <div className="pt-2 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setSharingPatient(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+                  onClick={() => {
+                    setSharingPatient(null);
+                    setShowQrCode(false);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 >
                   ปิด
                 </button>
