@@ -451,19 +451,6 @@ export default function App() {
         onToggleWidescreen={handleToggleWidescreen}
       />
 
-      {/* Primary Navigation Tabs (Desktop top bar + Mobile bottom bar) */}
-      <Navigation
-        activeTab={activeTab}
-        onSelectTab={(tab) => {
-          setActiveTab(tab);
-          setTargetHnForNextTab(undefined);
-        }}
-        pendingKitCount={pendingKitCount}
-        positiveCount={positiveCount}
-        overdueCount={overdueCount}
-        isWidescreen16x9={isWidescreen16x9}
-      />
-
       {/* Cloud Sync Toast Notification */}
       {cloudSyncToast && (
         <div className="fixed top-14 sm:top-18 right-3 left-3 sm:left-auto sm:right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl border border-slate-700 text-xs flex items-center gap-2 animate-fade-in no-print">
@@ -472,10 +459,28 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Content Area - Expands to 16:9 widescreen naturally with responsive padding */}
-      <main className={`flex-1 w-full mx-auto px-3 sm:px-5 lg:px-8 2xl:px-10 pt-3 sm:pt-5 pb-24 sm:pb-12 transition-all duration-300 ${
+      {/* Two-Column App Body: Left Navigation Sidebar + Right Content Area */}
+      <div className={`flex-1 flex flex-col md:flex-row w-full mx-auto transition-all duration-300 ${
         isWidescreen16x9 ? 'max-w-[1920px] 2xl:max-w-full' : 'max-w-7xl'
       }`}>
+        {/* Left Navigation Sidebar (Desktop vertical sidebar + Mobile bottom bar) */}
+        <Navigation
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            setTargetHnForNextTab(undefined);
+          }}
+          pendingKitCount={pendingKitCount}
+          positiveCount={positiveCount}
+          overdueCount={overdueCount}
+          isWidescreen16x9={isWidescreen16x9}
+          currentUser={currentUser}
+          totalRegistered={totalRegistered}
+          totalTested={totalTested}
+        />
+
+        {/* Main Content Area - Expands naturally with responsive padding */}
+        <main className="flex-1 min-w-0 px-3 sm:px-5 lg:px-8 2xl:px-10 pt-3 sm:pt-5 pb-24 md:pb-12">
         {activeTab === 'dashboard' && (
           <DashboardView
             patients={patients}
@@ -572,6 +577,7 @@ export default function App() {
           />
         )}
       </main>
+      </div>
 
       {/* Admin Edit Modal */}
       <EditPatientModal
